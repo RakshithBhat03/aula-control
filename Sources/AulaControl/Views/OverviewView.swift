@@ -4,26 +4,13 @@ import AulaKit
 struct OverviewView: View {
     @EnvironmentObject var model: AppModel
 
-    private var greeting: String {
-        let hour = Calendar.current.component(.hour, from: Date())
-        switch hour {
-        case 5..<12: return "Good morning"
-        case 12..<18: return "Good afternoon"
-        default: return "Good evening"
-        }
-    }
-
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                if model.connection.kind != .wired && !model.isPreview {
-                    connectionBanner
-                }
-
+            VStack(alignment: .leading, spacing: 20) {
                 PageHeader(
-                    eyebrow: "AULA F108 PRO",
-                    title: "\(greeting).",
-                    subtitle: "Every setting the Windows app offers — lighting, per-key color, onboard remapping and macros — rebuilt as a native Mac app."
+                    eyebrow: "F108 Pro",
+                    title: "Overview",
+                    subtitle: "Connection, current lighting and remap state. Hardware settings are written over USB-C."
                 ) {
                     HStack(spacing: 10) {
                         StatusPill(
@@ -38,22 +25,24 @@ struct OverviewView: View {
                         }
                         .buttonStyle(AccentButtonStyle(enabled: model.canUseHardware || model.isPreview))
                         .disabled(model.isBusy)
+                        .help("Send lighting, per-key colors, keymap, macros and options to the keyboard")
                     }
                 }
 
-                hero
-
-                HStack(spacing: 16) {
-                    quickBrightness
-                    quickEffect
-                    quickMacRemap
+                if model.connection.kind != .wired && !model.isPreview {
+                    connectionBanner
                 }
 
-                worksWhere
+                devicePanel
 
-                HStack(spacing: 16) {
-                    fnCheatSheet
-                    nextSteps
+                HStack(alignment: .top, spacing: 16) {
+                    capabilityTable
+                        .frame(maxWidth: .infinity)
+                    VStack(spacing: 16) {
+                        shortcutsPanel
+                        setupPanel
+                    }
+                    .frame(width: 300)
                 }
             }
             .padding(.horizontal, 30)
@@ -63,90 +52,88 @@ struct OverviewView: View {
         .scrollIndicators(.hidden)
     }
 
-    private var connectionBanner: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                Circle().fill(Theme.accent.opacity(0.14)).frame(width: 38, height: 38)
-                Image(systemName: "cable.connector")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Theme.accent)
-            }
-            VStack(alignment: .leading, spacing: 3) {
-                Text(model.connection.kind == .absent ? "Keyboard not connected" : "You're on Bluetooth")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.text)
-                Text(model.connection.kind == .absent
-                     ? "Connect with USB-C (Fn + 4) or pair over Bluetooth from the macOS menu bar."
-                     : "Typing and macOS remapping work now. Lighting, per-key RGB and onboard settings need the wired connection.")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Theme.secondary)
-            }
-            Spacer()
-            Text("Fn + 4  =  USB")
-                .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
-                .foregroundStyle(Theme.accent)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Capsule().fill(Theme.accent.opacity(0.10)))
-                .overlay(Capsule().strokeBorder(Theme.accent.opacity(0.2), lineWidth: 1))
+    // MARK: - Connection notice
+
+    private var bannerTitle: String {
+        switch model.connection.kind {
+        case .absent: return "Keyboard not detected"
+        case .dongle: return "Connected over 2.4 GHz"
+        default: return "Connected over Bluetooth"
         }
-        .padding(14)
+    }
+
+    private var bannerDetail: String {
+        model.connection.kind == .absent
+            ? "Connect USB-C and switch the keyboard to wired mode, or pair it over Bluetooth in macOS."
+            : "Typing and macOS remapping work. Lighting, per-key RGB and onboard settings need USB-C."
+    }
+
+    private var connectionBanner: some View {
+        HStack(spacing: 12) {
+            Image(systemName: model.connection.kind.symbol)
+                .font(.system(size: 13, weight: .regular))
+                .foregroundStyle(Theme.secondary)
+                .frame(width: 18)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(bannerTitle)
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(Theme.text)
+                Text(bannerDetail)
+                    .font(Theme.captionFont)
+                    .foregroundStyle(Theme.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 12)
+            HStack(spacing: 8) {
+                Text("Wired mode")
+                    .font(Theme.captionFont)
+                    .foregroundStyle(Theme.tertiary)
+                KeyCombo(["Fn", "4"])
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Press Fn plus 4 for wired mode")
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Theme.accent.opacity(0.045))
+            RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
+                .fill(Theme.field)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Theme.accent.opacity(0.16), lineWidth: 1)
+            RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
+                .strokeBorder(Theme.strokeStrong, lineWidth: 1)
         )
     }
 
-    private var hero: some View {
-        Card(padding: 0) {
-            HStack(alignment: .center, spacing: 24) {
-                VStack(alignment: .leading, spacing: 14) {
-                    HStack(spacing: 8) {
-                        Text("MAC-NATIVE CONTROL")
-                            .font(.system(size: 9.5, weight: .bold))
-                            .tracking(1.6)
-                            .foregroundStyle(Theme.accent)
-                        Rectangle().fill(Theme.accent.opacity(0.35)).frame(width: 24, height: 1)
-                        Text("NO WINDOWS REQUIRED")
-                            .font(.system(size: 9.5, weight: .medium))
-                            .tracking(1.2)
-                            .foregroundStyle(Theme.secondary)
-                    }
-                    Text("Make it\nyours.")
-                        .font(.system(size: 44, weight: .semibold, design: .rounded))
-                        .foregroundStyle(Theme.text)
-                        .lineSpacing(-4)
-                    Text("20 lighting effects, per-key RGB, full key remapping, macro recording and a synced LCD clock. All from one place.")
-                        .font(.system(size: 12.5))
-                        .foregroundStyle(Theme.secondary)
-                        .lineSpacing(3)
-                        .frame(maxWidth: 330, alignment: .leading)
+    // MARK: - Device panel
 
-                    HStack(spacing: 10) {
+    private var devicePanel: some View {
+        Card(padding: 0) {
+            VStack(spacing: 0) {
+                PanelHeader(
+                    model.connection.product.isEmpty ? "AULA F108 Pro" : model.connection.product,
+                    detail: "Backlight preview and live readouts"
+                ) {
+                    HStack(spacing: 8) {
                         Button {
                             model.section = .lighting
                         } label: {
                             Label("Lighting", systemImage: "light.max")
                         }
-                        .buttonStyle(AccentButtonStyle())
+                        .buttonStyle(GhostButtonStyle())
 
                         Button {
                             model.section = .perKey
                         } label: {
-                            Label("Per-key studio", systemImage: "paintpalette")
+                            Label("Per-key RGB", systemImage: "paintpalette")
                         }
                         .buttonStyle(GhostButtonStyle())
                     }
-                    .padding(.top, 4)
                 }
-                .padding(.leading, 30)
-                .padding(.vertical, 28)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 14)
 
-                Spacer(minLength: 0)
+                hairline
 
                 KeyboardView(
                     colorFor: { key in
@@ -155,45 +142,114 @@ struct OverviewView: View {
                     },
                     isInteractive: false
                 )
-                .frame(maxWidth: 610)
-                .padding(.trailing, 24)
-                .padding(.vertical, 26)
-                .overlay(alignment: .center) {
-                    RadialGradient(
-                        colors: [Theme.accent.opacity(0.10), .clear],
-                        center: .center, startRadius: 10, endRadius: 260
-                    )
-                    .allowsHitTesting(false)
-                }
+                .padding(.horizontal, 22)
+                .padding(.vertical, 22)
+                .frame(maxWidth: .infinity)
+
+                hairline
+
+                readoutStrip
             }
-            .background(
-                ZStack {
-                    LinearGradient(
-                        colors: [Color(hex: 0x181B21), Color(hex: 0x101216)],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    )
-                    RadialGradient(
-                        colors: [Theme.accent.opacity(0.075), .clear],
-                        center: .topLeading, startRadius: 20, endRadius: 520
-                    )
-                }
-            )
         }
-        .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
     }
 
-    private var quickBrightness: some View {
-        Card(padding: 18) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Label("Brightness", systemImage: "sun.max")
-                        .font(.system(size: 11.5, weight: .semibold))
+    private var hairline: some View {
+        Rectangle().fill(Theme.stroke).frame(height: 1)
+    }
+
+    private var readoutStrip: some View {
+        HStack(alignment: .top, spacing: 0) {
+            connectionReadout
+            columnDivider
+            effectReadout
+            columnDivider
+            brightnessReadout
+            columnDivider
+            onboardReadout
+            columnDivider
+            macRemapReadout
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var columnDivider: some View {
+        Rectangle().fill(Theme.stroke).frame(width: 1)
+    }
+
+    private var usbIdentifier: String {
+        guard model.connection.vendorID != 0 else { return "—" }
+        return String(format: "%04X:%04X", model.connection.vendorID, model.connection.productID)
+    }
+
+    private var connectionReadout: some View {
+        ReadoutColumn(label: "Connection") {
+            HStack(spacing: 7) {
+                Circle()
+                    .fill(model.connectionColor)
+                    .frame(width: 6, height: 6)
+                Text(model.hardwareStatusText)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(1)
+            }
+        } footer: {
+            HStack(spacing: 6) {
+                Text("VID:PID")
+                    .font(Theme.captionFont)
+                    .foregroundStyle(Theme.tertiary)
+                ValueChip(usbIdentifier, color: Theme.secondary)
+            }
+        }
+    }
+
+    private var effectReadout: some View {
+        ReadoutColumn(label: "Effect") {
+            HStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(Color(model.state.lighting.color))
+                    .frame(width: 11, height: 11)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                            .strokeBorder(Theme.strokeStrong, lineWidth: 1)
+                    )
+                Text(model.state.lighting.mode.name)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Theme.text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+        } footer: {
+            HStack(spacing: 8) {
+                ValueChip("#\(model.state.lighting.color.hex)", color: Theme.secondary)
+                Menu {
+                    ForEach(LightingMode.allCases) { mode in
+                        Button(mode.name) { model.setLightingMode(mode) }
+                    }
+                } label: {
+                    Text("Change")
+                        .font(.system(size: 11.5, weight: .medium))
                         .foregroundStyle(Theme.secondary)
-                    Spacer()
-                    Text("\(model.state.lighting.brightness) / 5")
-                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(Theme.text)
                 }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .help("Choose a backlight effect")
+            }
+        }
+    }
+
+    private var brightnessReadout: some View {
+        ReadoutColumn(label: "Brightness") {
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Text("\(model.state.lighting.brightness)")
+                    .font(.system(size: 14, weight: .medium, design: .monospaced))
+                    .foregroundStyle(Theme.text)
+                Text("/ 5")
+                    .font(.system(size: 11.5, weight: .medium, design: .monospaced))
+                    .foregroundStyle(Theme.tertiary)
+            }
+            .monospacedDigit()
+        } footer: {
+            HStack(spacing: 8) {
                 Slider(
                     value: Binding(
                         get: { Double(model.state.lighting.brightness) },
@@ -201,270 +257,313 @@ struct OverviewView: View {
                     ),
                     in: 0...5, step: 1
                 )
+                .controlSize(.small)
                 .tint(Theme.accent)
-                Button {
+                .accessibilityLabel("Brightness")
+
+                Button("Send") {
                     model.applyLighting()
-                } label: {
-                    Text("Send to keyboard")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Theme.accent)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(GhostButtonStyle())
                 .disabled(!model.canUseHardware && !model.isPreview)
                 .opacity(model.canUseHardware || model.isPreview ? 1 : 0.4)
+                .help("Send lighting to the keyboard")
             }
         }
     }
 
-    private var quickEffect: some View {
-        Card(padding: 18) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Label("Active effect", systemImage: "sparkles")
-                        .font(.system(size: 11.5, weight: .semibold))
-                        .foregroundStyle(Theme.secondary)
-                    Spacer()
-                    Circle()
-                        .fill(Color(model.state.lighting.color))
-                        .frame(width: 9, height: 9)
-                        .shadow(color: Color(model.state.lighting.color).opacity(0.7), radius: 5)
-                }
-                Text(model.state.lighting.mode.name)
-                    .font(.system(size: 20, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Theme.text)
-                Menu {
-                    ForEach(LightingMode.allCases) { mode in
-                        Button(mode.name) { model.setLightingMode(mode) }
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Text("Change effect")
-                        Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold))
-                    }
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Theme.accent)
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
+    private var onboardReadout: some View {
+        ReadoutColumn(label: "Onboard remaps") {
+            Text("\(model.state.keymap.count + model.state.fnKeymap.count)")
+                .font(.system(size: 14, weight: .medium, design: .monospaced))
+                .monospacedDigit()
+                .foregroundStyle(Theme.text)
+        } footer: {
+            HStack(spacing: 8) {
+                Text("\(model.state.keymap.count) base · \(model.state.fnKeymap.count) Fn")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Spacer(minLength: 0)
+                Button("Edit") { model.section = .keymap }
+                    .buttonStyle(GhostButtonStyle())
+                    .help("Open Keymap")
             }
         }
     }
 
-    private var quickMacRemap: some View {
-        Card(padding: 18) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Label("Mac remap", systemImage: "command")
-                        .font(.system(size: 11.5, weight: .semibold))
-                        .foregroundStyle(Theme.secondary)
-                    Spacer()
-                    Circle()
-                        .fill(model.remapRunning ? Theme.success : Theme.tertiary)
-                        .frame(width: 7, height: 7)
-                }
+    private var macRemapReadout: some View {
+        ReadoutColumn(label: "Mac remap") {
+            HStack(spacing: 7) {
+                Circle()
+                    .fill(model.remapRunning ? Theme.success : Theme.tertiary)
+                    .frame(width: 6, height: 6)
                 Text(model.remapRunning ? "Active" : "Inactive")
-                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(Theme.text)
-                HStack(spacing: 8) {
-                    Toggle("", isOn: Binding(
-                        get: { model.state.macRemap.enabled },
-                        set: { model.setMacRemapEnabled($0) }
-                    ))
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .tint(Theme.accent)
+            }
+        } footer: {
+            HStack(spacing: 8) {
+                Toggle("Mac remap", isOn: Binding(
+                    get: { model.state.macRemap.enabled },
+                    set: { model.setMacRemapEnabled($0) }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .tint(Theme.accent)
 
-                    Button("Configure") { model.section = .macRemap }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Theme.accent)
-                }
+                Spacer(minLength: 0)
+
+                Button("Configure") { model.section = .macRemap }
+                    .buttonStyle(GhostButtonStyle())
             }
         }
     }
 
-    private var worksWhere: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("What works where")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(Theme.text)
-                        Text("The keyboard has two independent control surfaces.")
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(Theme.secondary)
-                    }
-                    Spacer()
+    // MARK: - Capabilities
+
+    private struct Capability: Identifiable {
+        let name: String
+        let wired: Bool
+        let bluetooth: Bool
+        var id: String { name }
+    }
+
+    private let capabilities: [Capability] = [
+        Capability(name: "Backlight effects and color", wired: true, bluetooth: false),
+        Capability(name: "Per-key RGB", wired: true, bluetooth: false),
+        Capability(name: "Onboard remap, base and Fn layers", wired: true, bluetooth: false),
+        Capability(name: "Macros stored on the keyboard", wired: true, bluetooth: false),
+        Capability(name: "Sleep, debounce and key locks", wired: true, bluetooth: false),
+        Capability(name: "LCD clock sync", wired: true, bluetooth: false),
+        Capability(name: "Typing and media keys", wired: true, bluetooth: true),
+        Capability(name: "Per-key macOS remap", wired: true, bluetooth: true),
+        Capability(name: "Macro playback on this Mac", wired: true, bluetooth: true),
+    ]
+
+    private let transportColumnWidth: CGFloat = 96
+
+    private var capabilityTable: some View {
+        Card(padding: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                PanelHeader("What works where", detail: "Hardware settings use the wired config interface.") {
                     StatusPill(
                         text: model.connection.kind.supportsHardwareConfig ? "USB ready" : "USB needed",
-                        color: model.connection.kind.supportsHardwareConfig ? Theme.success : Theme.accent,
+                        color: model.connection.kind.supportsHardwareConfig ? Theme.success : Theme.tertiary,
                         icon: model.connection.kind.supportsHardwareConfig ? "checkmark" : "cable.connector"
                     )
                 }
+                .padding(.horizontal, 18)
+                .padding(.top, 14)
+                .padding(.bottom, 12)
 
-                HStack(alignment: .top, spacing: 0) {
-                    capabilityColumn(
-                        icon: "cable.connector",
-                        title: "USB-C wired",
-                        subtitle: "Full hardware control",
-                        color: Theme.mint,
-                        items: [
-                            "20 backlight effects + color",
-                            "Per-key RGB painting",
-                            "Onboard key remap (normal + FN)",
-                            "Macros stored on the keyboard",
-                            "Sleep, debounce and key locks",
-                            "LCD clock sync",
-                        ],
-                        available: true
-                    )
-                    Rectangle()
-                        .fill(Theme.stroke)
-                        .frame(width: 1)
-                        .padding(.horizontal, 26)
-                    capabilityColumn(
-                        icon: "dot.radiowaves.left.and.right",
-                        title: "Bluetooth",
-                        subtitle: "Typing + macOS remap",
-                        color: Theme.blue,
-                        items: [
-                            "Normal typing and media keys",
-                            "Per-key macOS remapping",
-                            "Macro playback on this Mac",
-                            "Security: Secure Input still wins",
-                        ],
-                        available: model.connection.kind == .bluetooth,
-                        note: "Hardware settings are not exposed over BLE — this is an AULA firmware limitation."
-                    )
-                }
-            }
-        }
-    }
+                hairline
 
-    private func capabilityColumn(
-        icon: String, title: String, subtitle: String, color: Color,
-        items: [String], available: Bool, note: String? = nil
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 9) {
-                Image(systemName: icon)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(color)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
-                        .font(.system(size: 12.5, weight: .semibold))
-                        .foregroundStyle(Theme.text)
-                    Text(subtitle)
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(Theme.secondary)
+                HStack(spacing: 0) {
+                    Text("Capability")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    transportHeader("USB-C", isCurrent: model.connection.kind == .wired)
+                    transportHeader("Bluetooth", isCurrent: model.connection.kind == .bluetooth)
                 }
-                Spacer()
-                if available {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.success)
-                }
-            }
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(items, id: \.self) { item in
-                    HStack(alignment: .top, spacing: 7) {
-                        Circle().fill(color.opacity(0.7)).frame(width: 4, height: 4).padding(.top, 5)
-                        Text(item)
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(Theme.secondary)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Theme.tertiary)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 8)
+                .background(Theme.field)
+
+                hairline
+
+                ForEach(Array(capabilities.enumerated()), id: \.element.id) { index, capability in
+                    if index > 0 {
+                        Rectangle().fill(Theme.stroke).frame(height: 1).padding(.leading, 18)
                     }
+                    HStack(spacing: 0) {
+                        Text(capability.name)
+                            .font(Theme.bodyFont)
+                            .foregroundStyle(Theme.text)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        supportMark(capability.wired)
+                        supportMark(capability.bluetooth)
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 7)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(
+                        "\(capability.name): USB-C \(capability.wired ? "yes" : "no"), Bluetooth \(capability.bluetooth ? "yes" : "no")"
+                    )
+                }
+
+                hairline
+
+                Text("Bluetooth does not expose the config interface; this is an AULA firmware limitation. Secure Input fields bypass macOS remapping on any transport.")
+                    .font(Theme.captionFont)
+                    .foregroundStyle(Theme.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 12)
+            }
+        }
+    }
+
+    private func transportHeader(_ title: String, isCurrent: Bool) -> some View {
+        HStack(spacing: 5) {
+            if isCurrent {
+                Circle().fill(Theme.success).frame(width: 5, height: 5)
+            }
+            Text(title)
+                .foregroundStyle(isCurrent ? Theme.text : Theme.tertiary)
+        }
+        .frame(width: transportColumnWidth)
+        .help(isCurrent ? "Current connection" : "")
+    }
+
+    private func supportMark(_ supported: Bool) -> some View {
+        Group {
+            if supported {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Theme.text.opacity(0.85))
+            } else {
+                Text("—")
+                    .font(Theme.monoFont)
+                    .foregroundStyle(Theme.tertiary)
+            }
+        }
+        .frame(width: transportColumnWidth)
+    }
+
+    // MARK: - Side panels
+
+    private var shortcutsPanel: some View {
+        Card(padding: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                PanelHeader("Hardware shortcuts", detail: "Handled by the firmware, no app needed.")
+                    .padding(.horizontal, 16)
+                    .padding(.top, 14)
+                    .padding(.bottom, 10)
+                hairline
+                VStack(spacing: 0) {
+                    shortcutRow(["Fn", "4"], "USB-C wired")
+                    shortcutRow(["Fn", "1–3"], "Bluetooth slot 1–3")
+                    shortcutRow(["Fn", "E"], "macOS device mode")
+                    shortcutRow(["Fn", "L-Shift"], "Light bar effect")
+                    shortcutRow(["Fn", "R-Shift"], "Side strip effect")
+                    shortcutRow(["Fn", "/"], "Side strip color", isLast: true)
                 }
             }
-            if let note {
-                Text(note)
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(Theme.tertiary)
-                    .padding(.top, 2)
+        }
+    }
+
+    private func shortcutRow(_ keys: [String], _ action: String, isLast: Bool = false) -> some View {
+        VStack(spacing: 0) {
+            HStack {
+                KeyCombo(keys)
+                Spacer(minLength: 8)
+                Text(action)
+                    .font(Theme.captionFont)
+                    .foregroundStyle(Theme.secondary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 7)
+            if !isLast {
+                Rectangle().fill(Theme.stroke).frame(height: 1).padding(.leading, 16)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 
-    private var fnCheatSheet: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("Hardware shortcuts")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Theme.text)
-                    Spacer()
-                    Text("FIRMWARE")
-                        .font(.system(size: 8.5, weight: .bold))
-                        .tracking(1.2)
-                        .foregroundStyle(Theme.tertiary)
-                }
-                shortcutRow("Fn + 4", "Switch to USB-C")
-                shortcutRow("Fn + 1/2/3", "Bluetooth slot 1–3")
-                shortcutRow("Fn + E", "macOS device mode")
-                shortcutRow("Fn + L-Shift", "Light bar effect")
-                shortcutRow("Fn + R-Shift", "Side strips effect")
-                shortcutRow("Fn + /", "Side strip color")
-            }
-        }
-    }
-
-    private func shortcutRow(_ keys: String, _ action: String) -> some View {
-        HStack {
-            Text(keys)
-                .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
-                .foregroundStyle(Theme.text)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 3)
-                .background(RoundedRectangle(cornerRadius: 5).fill(Color.white.opacity(0.06)))
-            Spacer()
-            Text(action)
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.secondary)
-        }
-    }
-
-    private var nextSteps: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Set up in three steps")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Theme.text)
-                stepRow(number: 1, title: "Connect USB-C", detail: "Settings travel over the wired config interface.", done: model.connection.kind == .wired)
-                stepRow(number: 2, title: "Choose a look", detail: "Pick an effect or paint individual keys.", done: !model.state.perKey.isEmpty || model.state.lighting.mode != .rolling)
-                stepRow(number: 3, title: "Make it Mac", detail: "Enable per-device remapping in Mac Remap.", done: model.state.macRemap.enabled)
-                Spacer(minLength: 0)
-                Text("Your settings are saved locally and can be re-applied at any time.")
-                    .font(.system(size: 10.5))
+    private var setupPanel: some View {
+        Card(padding: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                PanelHeader("Setup")
+                    .padding(.horizontal, 16)
+                    .padding(.top, 14)
+                    .padding(.bottom, 10)
+                hairline
+                stepRow(
+                    number: 1,
+                    title: "Connect over USB-C",
+                    detail: "Settings are sent over the wired config interface.",
+                    done: model.connection.kind == .wired
+                )
+                Rectangle().fill(Theme.stroke).frame(height: 1).padding(.leading, 16)
+                stepRow(
+                    number: 2,
+                    title: "Set lighting",
+                    detail: "Pick an effect or paint individual keys.",
+                    done: !model.state.perKey.isEmpty || model.state.lighting.mode != .rolling
+                )
+                Rectangle().fill(Theme.stroke).frame(height: 1).padding(.leading, 16)
+                stepRow(
+                    number: 3,
+                    title: "Enable Mac remap",
+                    detail: "Per-device remapping, configured in Mac remap.",
+                    done: model.state.macRemap.enabled
+                )
+                hairline
+                Text("Settings are saved locally and can be re-applied at any time.")
+                    .font(Theme.captionFont)
                     .foregroundStyle(Theme.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
             }
         }
     }
 
     private func stepRow(number: Int, title: String, detail: String, done: Bool) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            ZStack {
-                Circle()
-                    .fill(done ? Theme.success.opacity(0.16) : Color.white.opacity(0.06))
-                    .frame(width: 22, height: 22)
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Group {
                 if done {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.system(size: 10.5, weight: .medium))
                         .foregroundStyle(Theme.success)
                 } else {
                     Text("\(number)")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(Theme.secondary)
+                        .font(Theme.monoFont)
+                        .foregroundStyle(Theme.tertiary)
                 }
             }
+            .frame(width: 14, alignment: .leading)
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
-                    .font(.system(size: 11.5, weight: .medium))
-                    .foregroundStyle(Theme.text)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(done ? Theme.secondary : Theme.text)
                 Text(detail)
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(Theme.secondary)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            Spacer(minLength: 0)
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 9)
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(done ? "Done" : "Not done")
+    }
+}
+
+/// One cell of the readout strip: a caption, the live value, and a control row pinned to the bottom
+/// so controls line up across columns of differing content.
+fileprivate struct ReadoutColumn<Value: View, Footer: View>: View {
+    let label: String
+    @ViewBuilder var value: Value
+    @ViewBuilder var footer: Footer
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Theme.tertiary)
+            value
+            Spacer(minLength: 8)
+            footer
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
     }
 }
