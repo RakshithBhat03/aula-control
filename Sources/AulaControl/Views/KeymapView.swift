@@ -229,7 +229,7 @@ struct KeymapView: View {
     private var comparison: some View {
         Card(padding: 0) {
             VStack(alignment: .leading, spacing: 0) {
-                PanelHeader("Onboard keymap or Mac Remap", detail: "Use the Mac Remap page when the keyboard is on Bluetooth.")
+                PanelHeader("Onboard keymap or Mac remap", detail: "Use Mac remap when the keyboard is on Bluetooth.")
                     .padding(.horizontal, 16)
                     .padding(.vertical, 14)
 
@@ -249,7 +249,7 @@ struct KeymapView: View {
                         .fill(Theme.stroke)
                         .frame(width: 1)
                     SpecColumn(
-                        title: "Mac Remap",
+                        title: "Mac remap",
                         rows: [
                             ("Write over", "Bluetooth or USB"),
                             ("Stored on", "This Mac"),
@@ -348,7 +348,7 @@ private struct SpecColumn: View {
                             .foregroundStyle(Theme.tertiary)
                             .frame(width: 74, alignment: .leading)
                         Text(value)
-                            .font(Theme.monoFont)
+                            .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(Theme.text)
                     }
                 }

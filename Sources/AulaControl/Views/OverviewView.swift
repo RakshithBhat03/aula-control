@@ -45,9 +45,9 @@ struct OverviewView: View {
                     .frame(width: 300)
                 }
             }
-            .padding(.horizontal, 30)
-            .padding(.top, 30)
-            .padding(.bottom, 34)
+            .padding(.horizontal, 32)
+            .padding(.top, 28)
+            .padding(.bottom, 32)
         }
         .scrollIndicators(.hidden)
     }
