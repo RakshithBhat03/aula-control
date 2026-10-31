@@ -6,11 +6,15 @@ cd "$(dirname "$0")/.."
 APP_NAME="AULA Control"
 BUNDLE="dist/${APP_NAME}.app"
 BUILD_CONFIG="${CONFIG:-release}"
-VERSION="1.0.0"
+VERSION="${VERSION:-1.0.0}"
 
-echo "→ Building ${BUILD_CONFIG} binaries"
-swift build -c "$BUILD_CONFIG"
-BIN_DIR="$(swift build -c "$BUILD_CONFIG" --show-bin-path)"
+# Universal (Apple silicon + Intel) by default; ARCH=native builds only for this Mac, which is faster.
+ARCH_FLAGS=(--arch arm64 --arch x86_64)
+[[ "${ARCH:-universal}" == "native" ]] && ARCH_FLAGS=()
+
+echo "→ Building ${BUILD_CONFIG} binaries (${ARCH:-universal})"
+swift build -c "$BUILD_CONFIG" "${ARCH_FLAGS[@]}"
+BIN_DIR="$(swift build -c "$BUILD_CONFIG" "${ARCH_FLAGS[@]}" --show-bin-path)"
 
 echo "→ Rendering icon"
 mkdir -p build/AppIcon.iconset

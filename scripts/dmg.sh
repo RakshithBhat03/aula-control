@@ -10,12 +10,16 @@ trap 'rm -rf "$STAGE"' EXIT
 cp -R "dist/AULA Control.app" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
 
-rm -f "dist/AULA Control.dmg"
+VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "dist/AULA Control.app/Contents/Info.plist")"
+DMG="dist/AULA-Control-${VERSION}.dmg"
+
+rm -f "$DMG"
 hdiutil create \
   -volname "AULA Control" \
   -srcfolder "$STAGE" \
   -ov -format UDZO \
-  "dist/AULA Control.dmg" >/dev/null
+  "$DMG" >/dev/null
 
-echo "→ dist/AULA Control.dmg"
-du -sh "dist/AULA Control.dmg"
+echo "→ $DMG"
+du -sh "$DMG"
+shasum -a 256 "$DMG"
