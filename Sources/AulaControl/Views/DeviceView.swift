@@ -28,7 +28,6 @@ struct DeviceView: View {
                         }
                         .buttonStyle(GhostButtonStyle())
                         .disabled(model.isBusy || !hardwareReady)
-                        .opacity(hardwareReady ? 1 : 0.4)
                     }
                 }
 
@@ -47,7 +46,7 @@ struct DeviceView: View {
                         connectionCard
                         firmwareCard
                     }
-                    .frame(width: 320)
+                    .frame(width: 344)
                 }
             }
             .padding(.horizontal, 32)
@@ -180,7 +179,7 @@ struct DeviceView: View {
 
                 Hairline()
                 HStack(spacing: 12) {
-                    Text(hardwareReady ? "Writes over USB-C." : "Connect USB-C to apply.")
+                    Text(model.isPreview ? "Preview mode: commands are simulated." : (hardwareReady ? "Writes over USB-C." : "Connect USB-C to apply."))
                         .font(Theme.captionFont)
                         .foregroundStyle(Theme.tertiary)
                     Spacer()

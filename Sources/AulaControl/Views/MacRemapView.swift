@@ -222,15 +222,23 @@ struct MacRemapView: View {
         HStack(spacing: 10) {
             Text("Last key source")
                 .font(.system(size: 12.5, weight: .medium))
+                .fixedSize()
                 .foregroundStyle(Theme.text)
             Spacer(minLength: 8)
             if let source = model.lastKeySource {
                 Circle()
                     .fill(source.localizedCaseInsensitiveContains("aula") ? Theme.success : Theme.tertiary)
                     .frame(width: 6, height: 6)
-                ValueChip(source)
+                // Not a ValueChip: device names can be long and must truncate in the middle.
+                Text(source)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(Theme.text)
                     .lineLimit(1)
                     .truncationMode(.middle)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2.5)
+                    .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Theme.field))
+                    .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(Theme.stroke, lineWidth: 1))
             } else {
                 Text("Press a key to test")
                     .font(Theme.captionFont)

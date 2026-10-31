@@ -266,7 +266,6 @@ struct OverviewView: View {
                 }
                 .buttonStyle(GhostButtonStyle())
                 .disabled(!model.canUseHardware && !model.isPreview)
-                .opacity(model.canUseHardware || model.isPreview ? 1 : 0.4)
                 .help("Send lighting to the keyboard")
             }
         }

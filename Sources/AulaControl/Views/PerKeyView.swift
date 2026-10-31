@@ -224,7 +224,6 @@ struct PerKeyView: View {
                     }
                     .buttonStyle(GhostButtonStyle())
                     .disabled(model.isBusy || !canSend)
-                    .opacity(canSend ? 1 : 0.4)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)

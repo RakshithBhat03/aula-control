@@ -330,6 +330,7 @@ struct GhostButtonStyle: ButtonStyle {
     private struct GhostButtonBody: View {
         let configuration: ButtonStyle.Configuration
         let danger: Bool
+        @Environment(\.isEnabled) private var isEnabled
         @State private var hovering = false
 
         var body: some View {
@@ -346,6 +347,7 @@ struct GhostButtonStyle: ButtonStyle {
                     RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
                         .strokeBorder(Theme.strokeStrong, lineWidth: 1)
                 )
+                .opacity(isEnabled ? 1 : 0.4)
                 .offset(y: configuration.isPressed ? 0.5 : 0)
                 .onHover { hovering = $0 }
         }

@@ -101,6 +101,11 @@ struct SidebarView: View {
         .background(Theme.sidebar)
     }
 
+    /// Read from the bundle so the sidebar matches the release; `swift run` has no Info.plist.
+    private var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
+    }
+
     private var brand: some View {
         HStack(spacing: 10) {
             // A single keycap as the mark: skirt plus inset face, legend in mono.
@@ -127,7 +132,7 @@ struct SidebarView: View {
                 Text("AULA Control")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.text)
-                Text("F108 Pro · v1.0.0")
+                Text("F108 Pro · v\(appVersion)")
                     .font(.system(size: 10.5, design: .monospaced))
                     .foregroundStyle(Theme.tertiary)
             }
@@ -207,7 +212,7 @@ struct ConnectionCard: View {
                     .font(.system(size: 11))
                     .lineLimit(1)
                 Spacer(minLength: 0)
-                Text(model.connection.kind.supportsHardwareConfig ? "config" : "typing only")
+                Text(model.connection.kind == .absent ? "" : (model.connection.kind.supportsHardwareConfig ? "config" : "typing only"))
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(model.connection.kind.supportsHardwareConfig ? Theme.tertiary : Theme.accent)
             }

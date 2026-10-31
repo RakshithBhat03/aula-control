@@ -32,11 +32,20 @@ struct LightingView: View {
                     title: "Lighting",
                     subtitle: "20 firmware effects with color, brightness, speed and direction. Stored on the keyboard, so settings follow it between machines."
                 ) {
-                    StatusPill(
-                        text: canSend ? "Ready to send" : "USB-C required",
-                        color: canSend ? Theme.success : Theme.secondary,
-                        icon: canSend ? nil : "cable.connector"
-                    )
+                    HStack(spacing: 10) {
+                        StatusPill(
+                            text: canSend ? "Ready to send" : "USB-C required",
+                            color: canSend ? Theme.success : Theme.secondary,
+                            icon: canSend ? nil : "cable.connector"
+                        )
+                        Button {
+                            model.applyLighting()
+                        } label: {
+                            Label("Apply lighting", systemImage: "arrow.down.to.line")
+                        }
+                        .buttonStyle(AccentButtonStyle(enabled: canSend))
+                        .disabled(model.isBusy || !canSend)
+                    }
                 }
 
                 boardPreview
