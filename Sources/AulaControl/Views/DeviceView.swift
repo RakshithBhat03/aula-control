@@ -5,15 +5,17 @@ struct DeviceView: View {
     @EnvironmentObject var model: AppModel
     @State private var showResetConfirm = false
 
+    private var hardwareReady: Bool { model.canUseHardware || model.isPreview }
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 20) {
                 PageHeader(
-                    eyebrow: "KEYBOARD",
+                    eyebrow: "USB-C",
                     title: "Device",
-                    subtitle: "Connection details, power behavior and the firmware settings that are easy to forget."
+                    subtitle: "Connection details, power and response options, and key locks stored in the keyboard's firmware."
                 ) {
-                    HStack(spacing: 10) {
+                    HStack(spacing: 8) {
                         StatusPill(
                             text: model.hardwareStatusText,
                             color: model.connectionColor,
@@ -24,43 +26,33 @@ struct DeviceView: View {
                         } label: {
                             Label("Push saved config", systemImage: "arrow.down.to.line")
                         }
-                        .buttonStyle(AccentButtonStyle(enabled: model.canUseHardware || model.isPreview))
-                        .disabled(model.isBusy || !(model.canUseHardware || model.isPreview))
+                        .buttonStyle(GhostButtonStyle())
+                        .disabled(model.isBusy || !hardwareReady)
+                        .opacity(hardwareReady ? 1 : 0.4)
                     }
                 }
 
                 if model.connection.kind != .wired && !model.isPreview {
-                    HStack(spacing: 12) {
-                        Image(systemName: "cable.connector")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(Theme.accent)
-                        Text("Options on this page write to the keyboard and need the USB-C connection. Press Fn + 4 to switch modes.")
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(Theme.accent.opacity(0.9))
-                        Spacer()
+                    transportNotice
+                }
+
+                HStack(alignment: .top, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        optionsCard
+                        utilitiesCard
                     }
-                    .padding(13)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Theme.accent.opacity(0.06)))
-                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.accent.opacity(0.18), lineWidth: 1))
-                }
+                    .frame(maxWidth: .infinity)
 
-                HStack(alignment: .top, spacing: 18) {
-                    connectionCard
-                        .frame(maxWidth: .infinity)
-                    optionsCard
-                        .frame(maxWidth: .infinity)
-                }
-
-                HStack(alignment: .top, spacing: 18) {
-                    utilitiesCard
-                        .frame(maxWidth: .infinity)
-                    firmwareCard
-                        .frame(maxWidth: .infinity)
+                    VStack(alignment: .leading, spacing: 16) {
+                        connectionCard
+                        firmwareCard
+                    }
+                    .frame(width: 320)
                 }
             }
-            .padding(.horizontal, 30)
-            .padding(.top, 30)
-            .padding(.bottom, 34)
+            .padding(.horizontal, 32)
+            .padding(.top, 28)
+            .padding(.bottom, 32)
         }
         .scrollIndicators(.hidden)
         .confirmationDialog(
@@ -77,302 +69,489 @@ struct DeviceView: View {
         }
     }
 
-    private var connectionCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Text("Connection")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Theme.text)
-                    Spacer()
-                    Circle()
-                        .fill(model.connectionColor)
-                        .frame(width: 7, height: 7)
-                        .shadow(color: model.connectionColor.opacity(0.8), radius: 5)
-                }
+    // MARK: - Transport notice
 
-                VStack(spacing: 0) {
-                    detailRow("Product", model.connection.kind == .absent ? "—" : model.connection.product)
-                    divider
-                    detailRow("Transport", model.connection.kind == .absent ? "—" : model.connection.transport)
-                    divider
-                    detailRow("USB ID", String(format: "%04X:%04X", model.connection.vendorID, model.connection.productID))
-                    divider
-                    detailRow("Unique ID", model.connection.uniqueID ?? "—", mono: true)
-                    divider
-                    detailRow("HID services", "\(AulaDiscovery.allAulaDevices().count)")
-                    divider
-                    detailRow("Config interface", model.connection.kind == .wired ? "0xFF13 ready" : "unavailable")
-                }
-
-                HStack(spacing: 9) {
-                    Image(systemName: model.connection.kind == .wired ? "checkmark.circle.fill" : "info.circle")
-                        .font(.system(size: 11))
-                        .foregroundStyle(model.connection.kind == .wired ? Theme.success : Theme.accent)
-                    Text(model.connection.kind == .wired
-                         ? "The wired configuration interface is available."
-                         : "Bluetooth is input-only. Plug in USB-C for full config.")
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(Theme.secondary)
-                }
-                .padding(10)
-                .background(RoundedRectangle(cornerRadius: 9).fill(Color.white.opacity(0.025)))
-            }
-        }
-    }
-
-    private func detailRow(_ label: String, _ value: String, mono: Bool = false) -> some View {
-        HStack(alignment: .top) {
-            Text(label)
-                .font(.system(size: 11))
+    private var transportNotice: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "info.circle")
+                .font(.system(size: 12, weight: .regular))
                 .foregroundStyle(Theme.secondary)
-            Spacer(minLength: 12)
-            Text(value)
-                .font(.system(size: mono ? 9.5 : 11, weight: .medium, design: mono ? .monospaced : .default))
-                .foregroundStyle(Theme.text)
-                .multilineTextAlignment(.trailing)
-                .lineLimit(2)
-                .truncationMode(.middle)
+            Text("Options on this page write over the USB-C cable. Switch to wired mode with")
+                .font(Theme.captionFont)
+                .foregroundStyle(Theme.secondary)
+            KeyCombo(["Fn", "4"])
+            Spacer(minLength: 0)
         }
-        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+                .fill(Theme.field)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+                .strokeBorder(Theme.stroke, lineWidth: 1)
+        )
     }
 
-    private var divider: some View {
-        Rectangle().fill(Theme.stroke).frame(height: 1)
-    }
-
-    private var sleepLabel: String {
-        switch model.state.options.sleep {
-        case 1: return "1 min"
-        case 2: return "5 min"
-        case 3: return "30 min"
-        default: return "Never"
-        }
-    }
+    // MARK: - Options
 
     private var optionsCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Text("Power & response")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Theme.text)
-                    Spacer()
-                    Text("FIRMWARE")
-                        .font(.system(size: 8.5, weight: .bold))
-                        .tracking(1.2)
+        Card(padding: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                PanelHeader(
+                    "Firmware options",
+                    detail: "Saved with your config. Apply writes them to the keyboard."
+                )
+                .padding(.horizontal, 18)
+                .padding(.top, 16)
+                .padding(.bottom, 12)
+
+                GroupLabel("Power and response")
+
+                FormRow(title: "Sleep after inactivity", detail: "Turns the radio off when idle") {
+                    SleepSelector(value: Binding(
+                        get: { model.state.options.sleep },
+                        set: { model.state.options.sleep = $0 }
+                    ))
+                }
+                Hairline().padding(.leading, 18)
+                VStack(alignment: .leading, spacing: 3) {
+                    SliderRow(
+                        title: "Key response / debounce",
+                        value: Binding(
+                            get: { Double(model.state.options.response) },
+                            set: { model.state.options.response = UInt8($0) }
+                        ),
+                        range: 1...5, step: 1,
+                        valueLabel: "Level \(model.state.options.response)"
+                    )
+                    HStack {
+                        Text("1").font(.system(size: 10, design: .monospaced))
+                        Spacer()
+                        Text("5").font(.system(size: 10, design: .monospaced))
+                    }
+                    .foregroundStyle(Theme.tertiary)
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 11)
+                Hairline().padding(.leading, 18)
+                FormRow(title: "Fn tap toggle", detail: "Tap to latch the layer instead of holding", keys: ["Fn"]) {
+                    SwitchControl(
+                        label: "Fn tap toggle",
+                        isOn: Binding(
+                            get: { model.state.options.fnToggle == 1 },
+                            set: { model.state.options.fnToggle = $0 ? 1 : 0 }
+                        )
+                    )
+                }
+
+                GroupLabel("Key locks")
+
+                FormRow(title: "Lock Windows key", detail: "Prevents accidental Start menu presses", keys: ["Win"]) {
+                    SwitchControl(
+                        label: "Lock Windows key",
+                        isOn: Binding(
+                            get: { model.state.options.lockWin },
+                            set: { model.state.options.lockWin = $0 }
+                        )
+                    )
+                }
+                Hairline().padding(.leading, 18)
+                FormRow(title: "Lock Alt + Tab", detail: "Disables the task switcher chord", keys: ["Alt", "Tab"]) {
+                    SwitchControl(
+                        label: "Lock Alt + Tab",
+                        isOn: Binding(
+                            get: { model.state.options.lockAltTab },
+                            set: { model.state.options.lockAltTab = $0 }
+                        )
+                    )
+                }
+                Hairline().padding(.leading, 18)
+                FormRow(title: "Lock Alt + F4", detail: "Disables the close window chord", keys: ["Alt", "F4"]) {
+                    SwitchControl(
+                        label: "Lock Alt + F4",
+                        isOn: Binding(
+                            get: { model.state.options.lockAltF4 },
+                            set: { model.state.options.lockAltF4 = $0 }
+                        )
+                    )
+                }
+
+                Hairline()
+                HStack(spacing: 12) {
+                    Text(hardwareReady ? "Writes over USB-C." : "Connect USB-C to apply.")
+                        .font(Theme.captionFont)
                         .foregroundStyle(Theme.tertiary)
-                }
-
-                HStack {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Sleep after inactivity")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(Theme.text)
-                        Text("Turn the radio off when idle")
-                            .font(.system(size: 10.5))
-                            .foregroundStyle(Theme.secondary)
-                    }
                     Spacer()
-                    Menu {
-                        Button("Never") { model.state.options.sleep = 0 }
-                        Button("1 minute") { model.state.options.sleep = 1 }
-                        Button("5 minutes") { model.state.options.sleep = 2 }
-                        Button("30 minutes") { model.state.options.sleep = 3 }
+                    Button {
+                        model.applyOptions()
                     } label: {
-                        HStack(spacing: 6) {
-                            Text(sleepLabel)
-                                .font(.system(size: 11.5, weight: .medium))
-                                .foregroundStyle(Theme.text)
-                            Image(systemName: "chevron.up.chevron.down")
-                                .font(.system(size: 8, weight: .bold))
-                                .foregroundStyle(Theme.tertiary)
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(RoundedRectangle(cornerRadius: 7).fill(Theme.field))
-                        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.stroke, lineWidth: 1))
+                        Label("Apply device options", systemImage: "checkmark")
                     }
-                    .menuStyle(.borderlessButton)
-                    .fixedSize()
+                    .buttonStyle(AccentButtonStyle(enabled: hardwareReady))
+                    .disabled(model.isBusy || !hardwareReady)
                 }
-
-                SliderRow(
-                    title: "Key response / debounce",
-                    value: Binding(
-                        get: { Double(model.state.options.response) },
-                        set: { model.state.options.response = UInt8($0) }
-                    ),
-                    range: 1...5, step: 1,
-                    valueLabel: "Level \(model.state.options.response)"
-                )
-
-                ToggleRow(
-                    title: "FN tap toggle",
-                    subtitle: "Tap FN to lock it instead of holding",
-                    isOn: Binding(
-                        get: { model.state.options.fnToggle == 1 },
-                        set: { model.state.options.fnToggle = $0 ? 1 : 0 }
-                    )
-                )
-
-                Rectangle().fill(Theme.stroke).frame(height: 1)
-
-                Text("Key locks")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Theme.secondary)
-
-                ToggleRow(
-                    title: "Lock Windows key",
-                    subtitle: "Prevent accidental Start-menu presses",
-                    isOn: Binding(
-                        get: { model.state.options.lockWin },
-                        set: { model.state.options.lockWin = $0 }
-                    )
-                )
-                ToggleRow(
-                    title: "Lock Alt + Tab",
-                    subtitle: "Disable the task switcher chord",
-                    isOn: Binding(
-                        get: { model.state.options.lockAltTab },
-                        set: { model.state.options.lockAltTab = $0 }
-                    )
-                )
-                ToggleRow(
-                    title: "Lock Alt + F4",
-                    subtitle: "Disable the close-window chord",
-                    isOn: Binding(
-                        get: { model.state.options.lockAltF4 },
-                        set: { model.state.options.lockAltF4 = $0 }
-                    )
-                )
-
-                Button {
-                    model.applyOptions()
-                } label: {
-                    Label("Apply device options", systemImage: "checkmark")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(AccentButtonStyle(enabled: model.canUseHardware || model.isPreview))
-                .disabled(model.isBusy || !(model.canUseHardware || model.isPreview))
+                .padding(.horizontal, 18)
+                .padding(.vertical, 12)
             }
         }
     }
 
+    // MARK: - Utilities
+
     private var utilitiesCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("Utilities")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Theme.text)
+        Card(padding: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                PanelHeader("Utilities")
+                    .padding(.horizontal, 18)
+                    .padding(.top, 16)
+                    .padding(.bottom, 6)
 
                 utilityRow(
-                    icon: "clock",
                     title: "Sync LCD clock",
-                    detail: "Send the current date and time to the 240 × 135 screen.",
+                    detail: "Sends the current date and time to the 240 × 135 screen.",
                     action: "Sync now"
                 ) {
                     model.syncClock()
                 }
-
-                Rectangle().fill(Theme.stroke).frame(height: 1)
-
+                Hairline().padding(.leading, 18)
                 utilityRow(
-                    icon: "arrow.counterclockwise",
                     title: "Reset onboard keymap",
-                    detail: "Clear the \(model.selectedLayer.title.lowercased()) and restore factory behavior.",
+                    detail: "Clears the \(model.selectedLayer.title.lowercased()) and restores factory behavior.",
                     action: "Reset…",
                     danger: true
                 ) {
                     showResetConfirm = true
                 }
-
-                Rectangle().fill(Theme.stroke).frame(height: 1)
-
+                Hairline().padding(.leading, 18)
                 utilityRow(
-                    icon: "square.and.arrow.down",
                     title: "Apply saved configuration",
-                    detail: "Re-send lighting, keymap, macros, per-key colors and options.",
+                    detail: "Re-sends lighting, keymap, macros, per-key colors and options.",
                     action: "Push all"
                 ) {
                     model.pushAll()
                 }
+                .padding(.bottom, 4)
             }
         }
     }
 
     private func utilityRow(
-        icon: String, title: String, detail: String, action: String,
+        title: String, detail: String, action: String,
         danger: Bool = false, perform: @escaping () -> Void
     ) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(danger ? Theme.danger : Theme.accent)
-                .frame(width: 18)
-            VStack(alignment: .leading, spacing: 3) {
+        let disabled = model.isBusy || (!hardwareReady && !danger)
+        return HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(Theme.text)
                 Text(detail)
-                    .font(.system(size: 10.5))
+                    .font(Theme.captionFont)
                     .foregroundStyle(Theme.secondary)
-                    .lineSpacing(1.5)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer()
+            Spacer(minLength: 12)
             Button(action: perform) {
                 Text(action)
-                    .font(.system(size: 10.5, weight: .semibold))
-                    .foregroundStyle(danger ? Theme.danger : Theme.accent)
             }
-            .buttonStyle(.plain)
-            .disabled(model.isBusy || (!(model.canUseHardware || model.isPreview) && !danger))
-            .opacity(model.isBusy || (!(model.canUseHardware || model.isPreview) && !danger) ? 0.35 : 1)
+            .buttonStyle(GhostButtonStyle(danger: danger))
+            .disabled(disabled)
+            .opacity(disabled ? 0.4 : 1)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 11)
+    }
+
+    // MARK: - Connection
+
+    private var connectionCard: some View {
+        Card(padding: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                PanelHeader("Connection") {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(model.connectionColor)
+                            .frame(width: 6, height: 6)
+                        Text(model.connection.kind.title)
+                            .font(Theme.captionFont)
+                            .foregroundStyle(Theme.secondary)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+                .padding(.bottom, 10)
+
+                Hairline()
+                specRow("Product", model.connection.kind == .absent ? "—" : model.connection.product)
+                Hairline()
+                specRow("Transport", model.connection.kind == .absent ? "—" : model.connection.transport)
+                Hairline()
+                specRow("USB ID", String(format: "%04X:%04X", model.connection.vendorID, model.connection.productID))
+                Hairline()
+                specRow("Unique ID", model.connection.uniqueID ?? "—")
+                Hairline()
+                specRow("HID services", "\(AulaDiscovery.allAulaDevices().count)")
+                Hairline()
+                specRow(
+                    "Config interface",
+                    model.connection.kind == .wired ? "0xFF13 ready" : "unavailable",
+                    color: model.connection.kind == .wired ? Theme.success : Theme.tertiary
+                )
+                Hairline()
+
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: model.connection.kind == .wired ? "checkmark.circle" : "info.circle")
+                        .font(.system(size: 11, weight: .regular))
+                        .foregroundStyle(model.connection.kind == .wired ? Theme.success : Theme.tertiary)
+                        .padding(.top, 1)
+                    Text(connectionNote)
+                        .font(Theme.captionFont)
+                        .foregroundStyle(Theme.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
         }
     }
+
+    private var connectionNote: String {
+        switch model.connection.kind {
+        case .wired: return "Wired configuration interface available."
+        case .absent: return "No keyboard detected. Connect USB-C for full configuration."
+        case .bluetooth, .dongle: return "Wireless links are input-only. Connect USB-C for full configuration."
+        }
+    }
+
+    private func specRow(_ label: String, _ value: String, color: Color = Theme.text) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(label)
+                .font(Theme.captionFont)
+                .foregroundStyle(Theme.secondary)
+            Spacer(minLength: 12)
+            Text(value)
+                .font(Theme.monoFont)
+                .monospacedDigit()
+                .foregroundStyle(color)
+                .multilineTextAlignment(.trailing)
+                .lineLimit(2)
+                .truncationMode(.middle)
+                .textSelection(.enabled)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+    }
+
+    // MARK: - Firmware shortcuts
 
     private var firmwareCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 13) {
-                HStack {
-                    Text("Firmware cheat sheet")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Theme.text)
-                    Spacer()
-                    Image(systemName: "keyboard")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.tertiary)
-                }
+        Card(padding: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                PanelHeader("Onboard shortcuts", detail: "Handled by firmware on every connection.")
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                    .padding(.bottom, 10)
 
-                shortcutRow("Fn + 4", "USB-C mode")
-                shortcutRow("Fn + ~", "2.4 GHz dongle")
-                shortcutRow("Fn + 1 / 2 / 3", "Bluetooth slot")
-                shortcutRow("Fn + Q / W / E / R", "Android / Windows / Mac / iOS")
-                shortcutRow("Fn + L-Shift", "Light bar effect")
-                shortcutRow("Fn + R-Shift", "Side strip effect")
-                shortcutRow("Fn + B", "Light bar power")
+                Hairline()
+                shortcutRow(["4"], "USB-C mode")
+                Hairline()
+                shortcutRow(["~"], "2.4 GHz dongle")
+                Hairline()
+                shortcutRow(["1", "2", "3"], "Bluetooth slot")
+                Hairline()
+                shortcutRow(["Q", "W", "E", "R"], "Android / Win / Mac / iOS")
+                Hairline()
+                shortcutRow(["L-Shift"], "Light bar effect")
+                Hairline()
+                shortcutRow(["R-Shift"], "Side strip effect")
+                Hairline()
+                shortcutRow(["B"], "Light bar power")
+                Hairline()
 
-                Text("The light bar and side strips are controlled by firmware only. AULA's own Windows app cannot change them either.")
-                    .font(.system(size: 10))
+                Text("The light bar and side strips are firmware-only. AULA's Windows app cannot set them either.")
+                    .font(.system(size: 11))
                     .foregroundStyle(Theme.tertiary)
-                    .lineSpacing(1.5)
-                    .padding(.top, 2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
             }
         }
     }
 
-    private func shortcutRow(_ keys: String, _ action: String) -> some View {
-        HStack {
-            Text(keys)
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .foregroundStyle(Theme.text)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 3)
-                .background(RoundedRectangle(cornerRadius: 5).fill(Color.white.opacity(0.06)))
-            Spacer()
+    /// Every onboard shortcut is Fn plus one of several alternative keys.
+    private func shortcutRow(_ alternatives: [String], _ action: String) -> some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 3) {
+                KeyTag("Fn")
+                Text("+")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(Theme.tertiary)
+                ForEach(Array(alternatives.enumerated()), id: \.offset) { index, key in
+                    if index > 0 {
+                        Text("/")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(Theme.tertiary)
+                    }
+                    KeyTag(key)
+                }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Fn plus " + alternatives.joined(separator: " or "))
+            Spacer(minLength: 8)
             Text(action)
-                .font(.system(size: 10.5))
+                .font(Theme.captionFont)
                 .foregroundStyle(Theme.secondary)
+                .lineLimit(1)
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 7)
+    }
+}
+
+// MARK: - Form pieces
+
+fileprivate struct Hairline: View {
+    var body: some View {
+        Rectangle().fill(Theme.stroke).frame(height: 1)
+    }
+}
+
+/// Small group heading between hairline-separated form rows.
+fileprivate struct GroupLabel: View {
+    let text: String
+
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Rectangle().fill(Theme.stroke).frame(height: 1)
+            Text(text)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Theme.tertiary)
+                .padding(.horizontal, 18)
+                .padding(.top, 12)
+                .padding(.bottom, 2)
+        }
+    }
+}
+
+/// A settings row: title and detail on the left, optional key legend, control on the right.
+fileprivate struct FormRow<Control: View>: View {
+    let title: String
+    let detail: String
+    var keys: [String] = []
+    @ViewBuilder var control: Control
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(Theme.text)
+                Text(detail)
+                    .font(Theme.captionFont)
+                    .foregroundStyle(Theme.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 12)
+            if !keys.isEmpty {
+                KeyCombo(keys)
+                    .accessibilityHidden(true)
+            }
+            control
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 11)
+    }
+}
+
+fileprivate struct SwitchControl: View {
+    let label: String
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Toggle(label, isOn: $isOn)
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .controlSize(.small)
+            .tint(Theme.accent)
+            .padding(.leading, 6)
+    }
+}
+
+/// Segmented sleep timer. Firmware codes: 0 never, 1 one minute, 2 five minutes, 3 thirty minutes.
+fileprivate struct SleepSelector: View {
+    @Binding var value: UInt8
+
+    private let options: [(code: UInt8, label: String, help: String)] = [
+        (0, "Never", "Never sleep"),
+        (1, "1 min", "1 minute"),
+        (2, "5 min", "5 minutes"),
+        (3, "30 min", "30 minutes"),
+    ]
+
+    /// Unknown codes read as "Never", matching how the firmware value was labeled before.
+    private var selected: UInt8 { (1...3).contains(value) ? value : 0 }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(options.enumerated()), id: \.offset) { index, option in
+                if index > 0 {
+                    Rectangle()
+                        .fill(Theme.stroke)
+                        .frame(width: 1, height: 14)
+                        .opacity(selected == option.code || selected == options[index - 1].code ? 0 : 1)
+                }
+                SleepSegment(
+                    label: option.label,
+                    isSelected: selected == option.code
+                ) {
+                    value = option.code
+                }
+                .help(option.help)
+                .accessibilityLabel("Sleep after \(option.help)")
+            }
+        }
+        .padding(2)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+                .fill(Theme.field)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+                .strokeBorder(Theme.stroke, lineWidth: 1)
+        )
+        .fixedSize()
+    }
+}
+
+fileprivate struct SleepSegment: View {
+    let label: String
+    let isSelected: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundStyle(isSelected ? Theme.text : (hovering ? Theme.text : Theme.secondary))
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(isSelected ? Theme.cardRaised : Color.clear)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .strokeBorder(isSelected ? Theme.accent.opacity(0.85) : Color.clear, lineWidth: 1)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
