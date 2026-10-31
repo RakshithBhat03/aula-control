@@ -101,9 +101,13 @@ struct SidebarView: View {
         .background(Theme.sidebar)
     }
 
-    /// Read from the bundle so the sidebar matches the release; `swift run` has no Info.plist.
-    private var appVersion: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
+    /// Read from the bundle so the sidebar matches the release; an unbundled `swift run` build has
+    /// no Info.plist and shows the model only.
+    private var subtitle: String {
+        guard let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String else {
+            return "F108 Pro"
+        }
+        return "F108 Pro · v\(version)"
     }
 
     private var brand: some View {
@@ -132,7 +136,7 @@ struct SidebarView: View {
                 Text("AULA Control")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.text)
-                Text("F108 Pro · v\(appVersion)")
+                Text(subtitle)
                     .font(.system(size: 10.5, design: .monospaced))
                     .foregroundStyle(Theme.tertiary)
             }
