@@ -20,50 +20,42 @@ struct KeymapView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                PageHeader(
-                    eyebrow: "USB-C",
-                    title: "Onboard keymap",
-                    subtitle: "Remaps are written to the keyboard's memory and work on any computer it is plugged into."
-                ) {
-                    HStack(spacing: 10) {
-                        StatusPill(
-                            text: canWrite ? "\(map.count) remapped" : "USB-C required",
-                            color: canWrite ? (map.isEmpty ? Theme.tertiary : Theme.accent) : Theme.secondary,
-                            icon: canWrite ? nil : "cable.connector"
-                        )
-                        Button {
-                            model.applyKeymap()
-                        } label: {
-                            Label("Apply keymap", systemImage: "arrow.down.to.line")
-                        }
-                        .buttonStyle(AccentButtonStyle(enabled: canWrite))
-                        .disabled(model.isBusy || !canWrite)
+        PageScroll {
+            PageHeader(
+                eyebrow: "USB-C",
+                title: "Onboard keymap",
+                subtitle: "Remaps are written to the keyboard's memory and work on any computer it is plugged into."
+            ) {
+                HStack(spacing: 10) {
+                    StatusPill(
+                        text: canWrite ? "\(map.count) remapped" : "USB-C required",
+                        color: canWrite ? (map.isEmpty ? Theme.tertiary : Theme.accent) : Theme.secondary,
+                        icon: canWrite ? nil : "cable.connector"
+                    )
+                    Button {
+                        model.applyKeymap()
+                    } label: {
+                        Label("Apply keymap", systemImage: "arrow.down.to.line")
                     }
+                    .buttonStyle(AccentButtonStyle(enabled: canWrite))
+                    .disabled(model.isBusy || !canWrite)
                 }
-
-                toolbar
-
-                HStack(alignment: .top, spacing: 16) {
-                    boardPanel
-                    inspector
-                        .frame(width: 330)
-                }
-
-                comparison
             }
-            .padding(.horizontal, 32)
-            .padding(.top, 28)
-            .padding(.bottom, 34)
+
+            SplitRow {
+                boardPanel
+            } aside: {
+                inspector
+            }
+
+            comparison
         }
-        .scrollIndicators(.hidden)
     }
 
     // MARK: - Toolbar
 
     private var toolbar: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
             Picker("", selection: $model.selectedLayer) {
                 ForEach(RemapLayer.allCases) { layer in
                     Text(layer.title).tag(layer)
@@ -71,11 +63,16 @@ struct KeymapView: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .frame(width: 230)
+            .frame(width: 200)
 
-            layerHint
+            // The hint is the first thing to go when the column is too narrow for every control.
+            ViewThatFits(in: .horizontal) {
+                layerHint.fixedSize()
+                Color.clear.frame(width: 0, height: 0)
+            }
+            .layoutPriority(-1)
 
-            Spacer()
+            Spacer(minLength: 0)
 
             Menu {
                 Button("Mac modifier layout") { apply(RemapPresets.mac) }
@@ -97,6 +94,7 @@ struct KeymapView: View {
                 Label("Reset onboard", systemImage: "arrow.counterclockwise")
             }
             .buttonStyle(GhostButtonStyle())
+            .fixedSize()
         }
     }
 
@@ -117,43 +115,42 @@ struct KeymapView: View {
 
     // MARK: - Board
 
+    /// Layer controls, board, legend and the layer's mapping list. The layer controls live here
+    /// because they change what the board shows. When the inspector is taller, the board band
+    /// takes the spare height and keeps the keyboard centered in it, so the legend and mapping
+    /// list stay on the bottom edge level with the inspector's footer.
     private var boardPanel: some View {
-        Card(padding: 0) {
+        Card(padding: 0, fillHeight: true) {
             VStack(alignment: .leading, spacing: 0) {
-                PanelHeader(model.selectedLayer.title, detail: "Select a key to change what it sends.") {
-                    if !map.isEmpty {
-                        ValueChip("\(map.count) mapped")
-                    }
+                PanelHeaderBand("Board", detail: "Select a key to change what it sends.")
+
+                VStack(alignment: .leading, spacing: Theme.panelInset) {
+                    toolbar
+                    KeyboardView(
+                        colorFor: { key in
+                            guard map[key.name] != nil else { return nil }
+                            // Warm graphite, just enough to separate remapped caps without reading as lit.
+                            return AulaRGB(58, 47, 28)
+                        },
+                        selectedKey: selectedKey?.name,
+                        mappedKeys: Set(map.keys),
+                        showRemapDot: true,
+                        onTap: { key in model.selectedKey = key.name }
+                    )
+                    .frame(maxHeight: .infinity)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 14)
-                .padding(.bottom, 12)
+                .padding(Theme.panelInset)
 
-                KeyboardView(
-                    colorFor: { key in
-                        guard map[key.name] != nil else { return nil }
-                        // Warm graphite, just enough to separate remapped caps without reading as lit.
-                        return AulaRGB(58, 47, 28)
-                    },
-                    selectedKey: selectedKey?.name,
-                    mappedKeys: Set(map.keys),
-                    showRemapDot: true,
-                    onTap: { key in model.selectedKey = key.name }
-                )
-                .padding(.horizontal, 12)
-                .padding(.bottom, 12)
-
-                hairline
+                Hairline()
 
                 legend
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
+                    .frame(minHeight: Theme.rowHeight)
+                    .padding(.horizontal, Theme.panelInset)
 
-                if !mappedKeysInOrder.isEmpty {
-                    hairline
-                    mappingList
-                        .padding(16)
-                }
+                Hairline()
+
+                mappingList
+                    .padding(Theme.panelInset)
             }
         }
     }
@@ -164,50 +161,33 @@ struct KeymapView: View {
                 RoundedRectangle(cornerRadius: 1, style: .continuous)
                     .fill(Theme.accent)
                     .frame(width: 5, height: 5)
+                    .frame(width: 10, height: 10)
                 Text("Remapped")
             }
             HStack(spacing: 6) {
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .strokeBorder(Theme.accent, lineWidth: 1.25)
+                    .strokeBorder(Theme.accent, lineWidth: 1.5)
                     .frame(width: 10, height: 10)
                 Text("Selected")
             }
-            Spacer()
+            Spacer(minLength: 12)
             Text("Unlisted keys keep their factory behavior.")
+                .foregroundStyle(Theme.tertiary)
         }
-        .font(.system(size: 11))
-        .foregroundStyle(Theme.tertiary)
+        .font(Theme.captionFont)
+        .foregroundStyle(Theme.secondary)
     }
 
     private var mappingList: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Mappings in this layer")
-                .font(.system(size: 11.5, weight: .medium))
-                .foregroundStyle(Theme.secondary)
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 170), spacing: 8, alignment: .leading)],
-                alignment: .leading,
-                spacing: 8
-            ) {
-                ForEach(mappedKeysInOrder) { key in
-                    if let action = map[key.name] {
-                        MappingRow(
-                            source: key,
-                            action: action,
-                            isSelected: selectedKey?.name == key.name
-                        ) {
-                            model.selectedKey = key.name
-                        }
-                    }
-                }
-            }
+        MappingList(title: "Mappings in this layer", keys: mappedKeysInOrder, map: map, selectedKey: selectedKey?.name) {
+            model.selectedKey = $0
         }
     }
 
     // MARK: - Inspector
 
     private var inspector: some View {
-        Card {
+        Card(fillHeight: true) {
             if let key = selectedKey {
                 ActionEditor(
                     key: key,
@@ -226,47 +206,29 @@ struct KeymapView: View {
 
     // MARK: - Onboard vs. Mac Remap
 
+    /// A two-column spec table. Every row is one `SpecRow`, so the onboard and Mac values always
+    /// share a baseline and the columns share one leading edge.
     private var comparison: some View {
         Card(padding: 0) {
             VStack(alignment: .leading, spacing: 0) {
-                PanelHeader("Onboard keymap or Mac remap", detail: "Use Mac remap when the keyboard is on Bluetooth.")
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
+                PanelHeaderBand("Onboard keymap or Mac remap", detail: "Use Mac remap when the keyboard is on Bluetooth.")
 
-                hairline
-
-                HStack(alignment: .top, spacing: 0) {
-                    SpecColumn(
-                        title: "Onboard keymap",
-                        rows: [
-                            ("Write over", "USB-C"),
-                            ("Stored on", "Keyboard"),
-                            ("Works on", "Any computer"),
-                        ],
-                        note: "Media actions and onboard macros keep working on other machines."
-                    )
-                    Rectangle()
-                        .fill(Theme.stroke)
-                        .frame(width: 1)
-                    SpecColumn(
-                        title: "Mac remap",
-                        rows: [
-                            ("Write over", "Bluetooth or USB"),
-                            ("Stored on", "This Mac"),
-                            ("Works on", "This Mac only"),
-                        ],
-                        note: "Can run macros on this Mac. Needs Accessibility permission."
-                    )
-                }
-                .fixedSize(horizontal: false, vertical: true)
+                SpecRow(label: "", onboard: "Onboard keymap", mac: "Mac remap", style: .heading)
+                Hairline()
+                SpecRow(label: "Write over", onboard: "USB-C", mac: "Bluetooth or USB")
+                Hairline()
+                SpecRow(label: "Stored on", onboard: "Keyboard", mac: "This Mac")
+                Hairline()
+                SpecRow(label: "Works on", onboard: "Any computer", mac: "This Mac only")
+                Hairline()
+                SpecRow(
+                    label: "Notes",
+                    onboard: "Media actions and onboard macros keep working on other machines.",
+                    mac: "Can run macros on this Mac. Needs Accessibility permission.",
+                    style: .note
+                )
             }
         }
-    }
-
-    private var hairline: some View {
-        Rectangle()
-            .fill(Theme.stroke)
-            .frame(height: 1)
     }
 
     // MARK: - Actions
@@ -287,78 +249,47 @@ struct KeymapView: View {
     }
 }
 
-/// One source key and what it now sends. Clicking it selects the key, mirroring a tap on the board.
-private struct MappingRow: View {
-    let source: KeyCap
-    let action: KeyAction
-    let isSelected: Bool
-    let onSelect: () -> Void
+/// One row of the comparison table: a label column, then the onboard and Mac values in two equal
+/// columns.
+private struct SpecRow: View {
+    enum Style { case value, heading, note }
 
-    @State private var hovering = false
+    let label: String
+    let onboard: String
+    let mac: String
+    var style: Style = .value
 
-    var body: some View {
-        Button(action: onSelect) {
-            HStack(spacing: 7) {
-                KeyTag(source.label.isEmpty ? source.name : source.label)
-                Image(systemName: "arrow.right")
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundStyle(Theme.tertiary)
-                Text(action.displayName)
-                    .font(Theme.monoFont)
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
-                    .fill(isSelected ? Theme.accent.opacity(0.10) : (hovering ? Theme.cardRaised : Theme.field))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
-                    .strokeBorder(isSelected ? Theme.accent.opacity(0.85) : Theme.stroke, lineWidth: 1)
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .help("\(source.name) sends \(action.displayName)")
-        .accessibilityLabel("\(source.label) key sends \(action.displayName)")
-    }
-}
-
-/// A labeled spec column: key/value rows with mono values, then a one-line note.
-private struct SpecColumn: View {
-    let title: String
-    let rows: [(String, String)]
-    let note: String
+    private static let labelWidth: CGFloat = 120
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Theme.text)
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(rows, id: \.0) { label, value in
-                    HStack(spacing: 8) {
-                        Text(label)
-                            .font(Theme.captionFont)
-                            .foregroundStyle(Theme.tertiary)
-                            .frame(width: 74, alignment: .leading)
-                        Text(value)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(Theme.text)
-                    }
-                }
-            }
-            Text(note)
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            Text(label)
                 .font(Theme.captionFont)
-                .foregroundStyle(Theme.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .foregroundStyle(Theme.tertiary)
+                .frame(width: Self.labelWidth, alignment: .leading)
+            cell(onboard)
+            cell(mac)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
+        .padding(.horizontal, Theme.panelInset)
+        .padding(.vertical, style == .note ? Theme.panelInset : 0)
+        .frame(minHeight: style == .note ? nil : Theme.rowHeight)
+    }
+
+    private func cell(_ text: String) -> some View {
+        Text(text)
+            .font(font)
+            .foregroundStyle(style == .note ? Theme.secondary : Theme.text)
+            .lineSpacing(style == .note ? 2 : 0)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.trailing, Theme.panelInset)
+    }
+
+    private var font: Font {
+        switch style {
+        case .heading: return Theme.sectionFont
+        case .value: return Theme.bodyFont.weight(.medium)
+        case .note: return Theme.captionFont
+        }
     }
 }

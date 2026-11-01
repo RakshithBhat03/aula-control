@@ -8,52 +8,45 @@ struct DeviceView: View {
     private var hardwareReady: Bool { model.canUseHardware || model.isPreview }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                PageHeader(
-                    eyebrow: "USB-C",
-                    title: "Device",
-                    subtitle: "Connection details, power and response options, and key locks stored in the keyboard's firmware."
-                ) {
-                    HStack(spacing: 8) {
-                        StatusPill(
-                            text: model.hardwareStatusText,
-                            color: model.connectionColor,
-                            icon: model.connection.kind.symbol
-                        )
-                        Button {
-                            model.pushAll()
-                        } label: {
-                            Label("Push saved config", systemImage: "arrow.down.to.line")
-                        }
-                        .buttonStyle(GhostButtonStyle())
-                        .disabled(model.isBusy || !hardwareReady)
+        PageScroll {
+            PageHeader(
+                eyebrow: "USB-C",
+                title: "Device",
+                subtitle: "Connection details, plus power, response and key-lock options stored on the keyboard."
+            ) {
+                HStack(spacing: 8) {
+                    StatusPill(
+                        text: model.hardwareStatusText,
+                        color: model.connectionColor,
+                        icon: model.connection.kind.symbol
+                    )
+                    Button {
+                        model.pushAll()
+                    } label: {
+                        Label("Apply all", systemImage: "arrow.down.to.line")
                     }
-                }
-
-                if model.connection.kind != .wired && !model.isPreview {
-                    transportNotice
-                }
-
-                HStack(alignment: .top, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 16) {
-                        optionsCard
-                        utilitiesCard
-                    }
-                    .frame(maxWidth: .infinity)
-
-                    VStack(alignment: .leading, spacing: 16) {
-                        connectionCard
-                        firmwareCard
-                    }
-                    .frame(width: 344)
+                    .buttonStyle(GhostButtonStyle())
+                    .disabled(model.isBusy || !hardwareReady)
+                    .help("Re-sends lighting, keymap, macros, per-key colors and options.")
                 }
             }
-            .padding(.horizontal, 32)
-            .padding(.top, 28)
-            .padding(.bottom, 32)
+
+            if model.connection.kind != .wired && !model.isPreview {
+                transportNotice
+            }
+
+            SplitRow {
+                VStack(alignment: .leading, spacing: Theme.gutter) {
+                    optionsCard
+                    utilitiesCard
+                }
+            } aside: {
+                VStack(alignment: .leading, spacing: Theme.gutter) {
+                    connectionCard
+                    shortcutsCard
+                }
+            }
         }
-        .scrollIndicators(.hidden)
         .confirmationDialog(
             "Reset the onboard keymap?",
             isPresented: $showResetConfirm,
@@ -81,61 +74,44 @@ struct DeviceView: View {
             KeyCombo(["Fn", "4"])
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
+        .padding(.horizontal, Theme.panelInset)
+        .padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+            RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
                 .fill(Theme.field)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+            RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
                 .strokeBorder(Theme.stroke, lineWidth: 1)
         )
     }
 
-    // MARK: - Options
+    // MARK: - Firmware options
 
     private var optionsCard: some View {
         Card(padding: 0) {
             VStack(alignment: .leading, spacing: 0) {
-                PanelHeader(
+                PanelHeaderBand(
                     "Firmware options",
                     detail: "Saved with your config. Apply writes them to the keyboard."
                 )
-                .padding(.horizontal, 18)
-                .padding(.top, 16)
-                .padding(.bottom, 12)
 
                 GroupLabel("Power and response")
-
-                FormRow(title: "Sleep after inactivity", detail: "Turns the radio off when idle") {
+                FormRow("Sleep after inactivity", detail: "Turns the radio off when idle") {
                     SleepSelector(value: Binding(
                         get: { model.state.options.sleep },
                         set: { model.state.options.sleep = $0 }
                     ))
                 }
-                Hairline().padding(.leading, 18)
-                VStack(alignment: .leading, spacing: 3) {
-                    SliderRow(
-                        title: "Key response / debounce",
-                        value: Binding(
-                            get: { Double(model.state.options.response) },
-                            set: { model.state.options.response = UInt8($0) }
-                        ),
-                        range: 1...5, step: 1,
-                        valueLabel: "Level \(model.state.options.response)"
-                    )
-                    HStack {
-                        Text("1").font(.system(size: 10, design: .monospaced))
-                        Spacer()
-                        Text("5").font(.system(size: 10, design: .monospaced))
-                    }
-                    .foregroundStyle(Theme.tertiary)
+                Hairline()
+                FormRow("Key response", detail: "Debounce level, from 1 to 5") {
+                    ResponseControl(value: Binding(
+                        get: { model.state.options.response },
+                        set: { model.state.options.response = $0 }
+                    ))
                 }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 11)
-                Hairline().padding(.leading, 18)
-                FormRow(title: "Fn tap toggle", detail: "Tap to latch the layer instead of holding", keys: ["Fn"]) {
+                Hairline()
+                KeyedFormRow("Fn tap toggle", detail: "Tap to latch the layer instead of holding", keys: ["Fn"]) {
                     SwitchControl(
                         label: "Fn tap toggle",
                         isOn: Binding(
@@ -145,9 +121,9 @@ struct DeviceView: View {
                     )
                 }
 
+                Hairline()
                 GroupLabel("Key locks")
-
-                FormRow(title: "Lock Windows key", detail: "Prevents accidental Start menu presses", keys: ["Win"]) {
+                KeyedFormRow("Lock Windows key", detail: "Prevents accidental Start menu presses", keys: ["Win"]) {
                     SwitchControl(
                         label: "Lock Windows key",
                         isOn: Binding(
@@ -156,8 +132,8 @@ struct DeviceView: View {
                         )
                     )
                 }
-                Hairline().padding(.leading, 18)
-                FormRow(title: "Lock Alt + Tab", detail: "Disables the task switcher chord", keys: ["Alt", "Tab"]) {
+                Hairline()
+                KeyedFormRow("Lock Alt + Tab", detail: "Disables the task switcher chord", keys: ["Alt", "Tab"]) {
                     SwitchControl(
                         label: "Lock Alt + Tab",
                         isOn: Binding(
@@ -166,8 +142,8 @@ struct DeviceView: View {
                         )
                     )
                 }
-                Hairline().padding(.leading, 18)
-                FormRow(title: "Lock Alt + F4", detail: "Disables the close window chord", keys: ["Alt", "F4"]) {
+                Hairline()
+                KeyedFormRow("Lock Alt + F4", detail: "Disables the close window chord", keys: ["Alt", "F4"]) {
                     SwitchControl(
                         label: "Lock Alt + F4",
                         isOn: Binding(
@@ -182,7 +158,7 @@ struct DeviceView: View {
                     Text(model.isPreview ? "Preview mode: commands are simulated." : (hardwareReady ? "Writes over USB-C." : "Connect USB-C to apply."))
                         .font(Theme.captionFont)
                         .foregroundStyle(Theme.tertiary)
-                    Spacer()
+                    Spacer(minLength: 12)
                     Button {
                         model.applyOptions()
                     } label: {
@@ -191,8 +167,7 @@ struct DeviceView: View {
                     .buttonStyle(AccentButtonStyle(enabled: hardwareReady))
                     .disabled(model.isBusy || !hardwareReady)
                 }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 12)
+                .padding(Theme.panelInset)
             }
         }
     }
@@ -200,75 +175,44 @@ struct DeviceView: View {
     // MARK: - Utilities
 
     private var utilitiesCard: some View {
-        Card(padding: 0) {
+        Card(padding: 0, fillHeight: true) {
             VStack(alignment: .leading, spacing: 0) {
-                PanelHeader("Utilities")
-                    .padding(.horizontal, 18)
-                    .padding(.top, 16)
-                    .padding(.bottom, 6)
-
-                utilityRow(
-                    title: "Sync LCD clock",
-                    detail: "Sends the current date and time to the 240 × 135 screen.",
-                    action: "Sync now"
-                ) {
-                    model.syncClock()
+                PanelHeaderBand("Utilities", detail: "One-off actions on the keyboard.")
+                FormRow("Sync LCD clock", detail: "Sends the current date and time to the 240 × 135 screen.") {
+                    Button("Sync now") { model.syncClock() }
+                        .buttonStyle(GhostButtonStyle())
+                        .disabled(model.isBusy || !hardwareReady)
                 }
-                Hairline().padding(.leading, 18)
-                utilityRow(
-                    title: "Reset onboard keymap",
-                    detail: "Clears the \(model.selectedLayer.title.lowercased()) and restores factory behavior.",
-                    action: "Reset…",
-                    danger: true
+                Hairline()
+                FormRow(
+                    "Reset onboard keymap",
+                    detail: "Clears the \(model.selectedLayer.title.lowercased()) and restores factory behavior."
                 ) {
-                    showResetConfirm = true
+                    Button("Reset…") { showResetConfirm = true }
+                        .buttonStyle(GhostButtonStyle(danger: true))
+                        .disabled(model.isBusy)
                 }
-                Hairline().padding(.leading, 18)
-                utilityRow(
-                    title: "Apply saved configuration",
-                    detail: "Re-sends lighting, keymap, macros, per-key colors and options.",
-                    action: "Push all"
-                ) {
-                    model.pushAll()
-                }
-                .padding(.bottom, 4)
             }
         }
-    }
-
-    private func utilityRow(
-        title: String, detail: String, action: String,
-        danger: Bool = false, perform: @escaping () -> Void
-    ) -> some View {
-        let disabled = model.isBusy || (!hardwareReady && !danger)
-        return HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(Theme.text)
-                Text(detail)
-                    .font(Theme.captionFont)
-                    .foregroundStyle(Theme.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 12)
-            Button(action: perform) {
-                Text(action)
-            }
-            .buttonStyle(GhostButtonStyle(danger: danger))
-            .disabled(disabled)
-            .opacity(disabled ? 0.4 : 1)
-        }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 11)
     }
 
     // MARK: - Connection
 
+    /// Why there's no battery level: USB-C has no battery report; the wireless links read it.
+    private var batteryNote: String {
+        switch model.connection.kind {
+        case .wired: return "Not reported over USB-C"
+        case .bluetooth, .dongle: return "Waiting for the keyboard"
+        case .absent: return "—"
+        }
+    }
+
     private var connectionCard: some View {
-        Card(padding: 0) {
+        let wired = model.connection.kind == .wired
+        let absent = model.connection.kind == .absent
+        return Card(padding: 0) {
             VStack(alignment: .leading, spacing: 0) {
-                PanelHeader("Connection") {
+                PanelHeaderBand("Connection", detail: "Read from the keyboard's HID services.") {
                     HStack(spacing: 6) {
                         Circle()
                             .fill(model.connectionColor)
@@ -278,40 +222,55 @@ struct DeviceView: View {
                             .foregroundStyle(Theme.secondary)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 16)
-                .padding(.bottom, 10)
 
+                SpecRow("Product") { SpecValue(absent ? "—" : model.connection.product, machine: false) }
                 Hairline()
-                specRow("Product", model.connection.kind == .absent ? "—" : model.connection.product)
+                SpecRow("Transport") { SpecValue(absent ? "—" : model.connection.transport, machine: false) }
                 Hairline()
-                specRow("Transport", model.connection.kind == .absent ? "—" : model.connection.transport)
+                SpecRow("Battery") {
+                    if let level = model.batteryPercent {
+                        BatteryIndicator(level: level)
+                    } else {
+                        Text(batteryNote)
+                            .font(Theme.captionFont)
+                            .foregroundStyle(Theme.tertiary)
+                    }
+                }
                 Hairline()
-                specRow("USB ID", String(format: "%04X:%04X", model.connection.vendorID, model.connection.productID))
+                SpecRow("USB ID") {
+                    SpecValue(String(format: "%04X:%04X", model.connection.vendorID, model.connection.productID))
+                }
                 Hairline()
-                specRow("Unique ID", model.connection.uniqueID ?? "—")
+                SpecRow("Unique ID") { SpecValue(model.connection.uniqueID ?? "—") }
                 Hairline()
-                specRow("HID services", "\(AulaDiscovery.allAulaDevices().count)")
+                SpecRow("HID services") { SpecValue("\(AulaDiscovery.allAulaDevices().count)") }
                 Hairline()
-                specRow(
-                    "Config interface",
-                    model.connection.kind == .wired ? "0xFF13 ready" : "unavailable",
-                    color: model.connection.kind == .wired ? Theme.success : Theme.tertiary
-                )
+                SpecRow("Config interface") {
+                    if wired {
+                        HStack(spacing: 6) {
+                            SpecValue("0xFF13", color: Theme.success)
+                            Text("ready")
+                                .font(Theme.captionFont)
+                                .foregroundStyle(Theme.success)
+                        }
+                    } else {
+                        Text("Unavailable")
+                            .font(Theme.captionFont)
+                            .foregroundStyle(Theme.tertiary)
+                    }
+                }
                 Hairline()
 
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: model.connection.kind == .wired ? "checkmark.circle" : "info.circle")
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: wired ? "checkmark.circle" : "info.circle")
                         .font(.system(size: 11, weight: .regular))
-                        .foregroundStyle(model.connection.kind == .wired ? Theme.success : Theme.tertiary)
-                        .padding(.top, 1)
+                        .foregroundStyle(wired ? Theme.success : Theme.tertiary)
                     Text(connectionNote)
                         .font(Theme.captionFont)
                         .foregroundStyle(Theme.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(Theme.panelInset)
             }
         }
     }
@@ -324,145 +283,80 @@ struct DeviceView: View {
         }
     }
 
-    private func specRow(_ label: String, _ value: String, color: Color = Theme.text) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(label)
-                .font(Theme.captionFont)
-                .foregroundStyle(Theme.secondary)
-            Spacer(minLength: 12)
-            Text(value)
-                .font(Theme.monoFont)
-                .monospacedDigit()
-                .foregroundStyle(color)
-                .multilineTextAlignment(.trailing)
-                .lineLimit(2)
-                .truncationMode(.middle)
-                .textSelection(.enabled)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-    }
+    // MARK: - Onboard shortcuts
 
-    // MARK: - Firmware shortcuts
-
-    private var firmwareCard: some View {
-        Card(padding: 0) {
+    private var shortcutsCard: some View {
+        Card(padding: 0, fillHeight: true) {
             VStack(alignment: .leading, spacing: 0) {
-                PanelHeader("Onboard shortcuts", detail: "Handled by firmware on every connection.")
-                    .padding(.horizontal, 16)
-                    .padding(.top, 16)
-                    .padding(.bottom, 10)
+                PanelHeaderBand("Onboard shortcuts", detail: "Handled by firmware on every connection.")
 
+                ShortcutRow("USB-C mode", keys: ["4"])
                 Hairline()
-                shortcutRow(["4"], "USB-C mode")
+                ShortcutRow("2.4 GHz dongle", keys: ["~"])
                 Hairline()
-                shortcutRow(["~"], "2.4 GHz dongle")
+                ShortcutRow("Bluetooth slot", keys: ["1", "2", "3"])
                 Hairline()
-                shortcutRow(["1", "2", "3"], "Bluetooth slot")
+                SystemModeRow()
                 Hairline()
-                shortcutRow(["Q", "W", "E", "R"], "Android / Win / Mac / iOS")
+                ShortcutRow("Light bar effect", keys: ["L-Shift"])
                 Hairline()
-                shortcutRow(["L-Shift"], "Light bar effect")
+                ShortcutRow("Side strip effect", keys: ["R-Shift"])
                 Hairline()
-                shortcutRow(["R-Shift"], "Side strip effect")
+                ShortcutRow("Light bar power", keys: ["B"])
                 Hairline()
-                shortcutRow(["B"], "Light bar power")
-                Hairline()
+
+                Spacer(minLength: 0)
 
                 Text("The light bar and side strips are firmware-only. AULA's Windows app cannot set them either.")
-                    .font(.system(size: 11))
+                    .font(Theme.captionFont)
                     .foregroundStyle(Theme.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
+                    .padding(Theme.panelInset)
             }
         }
-    }
-
-    /// Every onboard shortcut is Fn plus one of several alternative keys.
-    private func shortcutRow(_ alternatives: [String], _ action: String) -> some View {
-        HStack(spacing: 10) {
-            HStack(spacing: 3) {
-                KeyTag("Fn")
-                Text("+")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(Theme.tertiary)
-                ForEach(Array(alternatives.enumerated()), id: \.offset) { index, key in
-                    if index > 0 {
-                        Text("/")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(Theme.tertiary)
-                    }
-                    KeyTag(key)
-                }
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Fn plus " + alternatives.joined(separator: " or "))
-            Spacer(minLength: 8)
-            Text(action)
-                .font(Theme.captionFont)
-                .foregroundStyle(Theme.secondary)
-                .lineLimit(1)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 7)
     }
 }
 
 // MARK: - Form pieces
 
-fileprivate struct Hairline: View {
-    var body: some View {
-        Rectangle().fill(Theme.stroke).frame(height: 1)
-    }
-}
-
-/// Small group heading between hairline-separated form rows.
+/// Small group heading at the top of a run of form rows.
 fileprivate struct GroupLabel: View {
     let text: String
 
     init(_ text: String) { self.text = text }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Rectangle().fill(Theme.stroke).frame(height: 1)
-            Text(text)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Theme.tertiary)
-                .padding(.horizontal, 18)
-                .padding(.top, 12)
-                .padding(.bottom, 2)
-        }
+        Text(text)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(Theme.tertiary)
+            .padding(.horizontal, Theme.panelInset)
+            .padding(.top, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-/// A settings row: title and detail on the left, optional key legend, control on the right.
-fileprivate struct FormRow<Control: View>: View {
+/// A `FormRow` whose control is preceded by the key legend it governs, e.g. `Alt` + `Tab`.
+fileprivate struct KeyedFormRow<Control: View>: View {
     let title: String
     let detail: String
-    var keys: [String] = []
+    let keys: [String]
     @ViewBuilder var control: Control
 
+    init(_ title: String, detail: String, keys: [String], @ViewBuilder control: () -> Control) {
+        self.title = title
+        self.detail = detail
+        self.keys = keys
+        self.control = control()
+    }
+
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(Theme.text)
-                Text(detail)
-                    .font(Theme.captionFont)
-                    .foregroundStyle(Theme.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 12)
-            if !keys.isEmpty {
+        FormRow(title, detail: detail) {
+            HStack(spacing: 12) {
                 KeyCombo(keys)
                     .accessibilityHidden(true)
+                control
             }
-            control
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 11)
     }
 }
 
@@ -476,7 +370,34 @@ fileprivate struct SwitchControl: View {
             .toggleStyle(.switch)
             .controlSize(.small)
             .tint(Theme.accent)
-            .padding(.leading, 6)
+    }
+}
+
+/// Debounce level 1–5: a stepped slider with its current value at the trailing edge.
+fileprivate struct ResponseControl: View {
+    @Binding var value: UInt8
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text("1")
+                .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                .foregroundStyle(Theme.tertiary)
+            Slider(
+                value: Binding(
+                    get: { Double(value) },
+                    set: { value = UInt8($0.rounded()) }
+                ),
+                in: 1...5, step: 1
+            )
+            .controlSize(.small)
+            .tint(Theme.accent)
+            .frame(width: 150)
+            .accessibilityLabel("Key response level")
+            Text("5")
+                .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                .foregroundStyle(Theme.tertiary)
+            ValueChip("Level \(value)")
+        }
     }
 }
 
@@ -535,9 +456,10 @@ fileprivate struct SleepSegment: View {
     var body: some View {
         Button(action: action) {
             Text(label)
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .font(.system(size: 11.5, weight: .medium))
+                .monospacedDigit()
                 .foregroundStyle(isSelected ? Theme.text : (hovering ? Theme.text : Theme.secondary))
-                .padding(.horizontal, 9)
+                .padding(.horizontal, 10)
                 .padding(.vertical, 4)
                 .background(
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
@@ -552,5 +474,125 @@ fileprivate struct SleepSegment: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+// MARK: - Aside rows
+
+/// Compact label/value line for the spec-sheet panels in the aside. Same height and insets as
+/// `ShortcutRow`, so both aside panels share one rhythm.
+fileprivate struct SpecRow<Value: View>: View {
+    let label: String
+    @ViewBuilder var value: Value
+
+    init(_ label: String, @ViewBuilder value: () -> Value) {
+        self.label = label
+        self.value = value()
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(label)
+                .font(Theme.captionFont)
+                .foregroundStyle(Theme.secondary)
+                .lineLimit(1)
+            Spacer(minLength: 12)
+            value
+        }
+        .frame(minHeight: asideRowHeight)
+        .padding(.horizontal, Theme.panelInset)
+    }
+}
+
+/// Height of one line in the aside's spec and shortcut lists.
+fileprivate let asideRowHeight: CGFloat = 32
+
+/// A read-only value. Monospaced only for machine values such as IDs and hex codes; names stay in
+/// the regular face.
+fileprivate struct SpecValue: View {
+    let text: String
+    var color: Color = Theme.text
+    var machine: Bool = true
+
+    init(_ text: String, color: Color = Theme.text, machine: Bool = true) {
+        self.text = text
+        self.color = color
+        self.machine = machine
+    }
+
+    var body: some View {
+        Text(text)
+            .font(machine ? Theme.monoFont : .system(size: 12, weight: .medium))
+            .monospacedDigit()
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .textSelection(.enabled)
+    }
+}
+
+/// One onboard shortcut: what it does on the left, `Fn` plus its key (or alternative keys) on the
+/// right edge.
+fileprivate struct ShortcutRow: View {
+    let action: String
+    let keys: [String]
+
+    init(_ action: String, keys: [String]) {
+        self.action = action
+        self.keys = keys
+    }
+
+    var body: some View {
+        SpecRow(action) {
+            HStack(spacing: 3) {
+                KeyTag("Fn")
+                Text("+")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(Theme.tertiary)
+                ForEach(Array(keys.enumerated()), id: \.offset) { index, key in
+                    if index > 0 {
+                        Text("/")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(Theme.tertiary)
+                    }
+                    KeyTag(key)
+                }
+            }
+            .fixedSize()
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Fn plus " + keys.joined(separator: " or "))
+        }
+    }
+}
+
+/// `Fn` + Q / W / E / R picks the host system. The shortcut line matches the other rows; a legend
+/// underneath spells out which key selects which system, so the mapping reads directly.
+fileprivate struct SystemModeRow: View {
+    private let modes: [(key: String, name: String)] = [
+        ("Q", "Android"), ("W", "Windows"), ("E", "macOS"), ("R", "iOS"),
+    ]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ShortcutRow("System mode", keys: modes.map(\.key))
+            HStack(spacing: 0) {
+                ForEach(Array(modes.enumerated()), id: \.offset) { index, mode in
+                    if index > 0 { Spacer(minLength: 8) }
+                    HStack(spacing: 5) {
+                        Text(mode.key)
+                            .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                            .foregroundStyle(Theme.tertiary)
+                        Text(mode.name)
+                            .font(Theme.captionFont)
+                            .foregroundStyle(Theme.secondary)
+                            .lineLimit(1)
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Fn plus \(mode.key): \(mode.name)")
+                }
+            }
+            .padding(.horizontal, Theme.panelInset)
+            .padding(.bottom, 10)
+        }
     }
 }

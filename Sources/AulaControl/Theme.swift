@@ -34,6 +34,21 @@ enum Theme {
     static let radius: CGFloat = 10
     static let radiusSmall: CGFloat = 6
 
+    // Layout grid. Every page uses these; do not hand-tune insets per view.
+    /// Space between panels, horizontally and vertically.
+    static let gutter: CGFloat = 16
+    /// Inner padding of a panel and of its header, body and footer bands.
+    static let panelInset: CGFloat = 16
+    /// Fixed width of the right-hand column (inspectors, connection, shortcuts).
+    static let asideWidth: CGFloat = 340
+    /// Page content never grows wider than this; wider windows center it.
+    static let contentMaxWidth: CGFloat = 1240
+    static let pageInsetH: CGFloat = 32
+    static let pageInsetTop: CGFloat = 28
+    static let pageInsetBottom: CGFloat = 40
+    /// Minimum height of a form row inside a panel, so rows line up across panels.
+    static let rowHeight: CGFloat = 44
+
     // Typography scale.
     static let titleFont = Font.system(size: 22, weight: .semibold)
     static let sectionFont = Font.system(size: 13, weight: .semibold)
@@ -72,11 +87,15 @@ extension AulaRGB {
 /// A flat panel: surface fill and a hairline border. Use for top-level groups on a page only;
 /// nest rows with dividers, not more cards.
 struct Card<Content: View>: View {
-    var padding: CGFloat = 18
+    var padding: CGFloat = Theme.panelInset
+    /// Stretch to the height the parent offers, e.g. inside `SplitRow`, so side-by-side panels end
+    /// on the same line. Content stays top-aligned.
+    var fillHeight: Bool = false
     @ViewBuilder var content: Content
 
     var body: some View {
         content
+            .frame(maxWidth: .infinity, maxHeight: fillHeight ? .infinity : nil, alignment: .topLeading)
             .padding(padding)
             .background(
                 RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
@@ -101,8 +120,12 @@ struct PanelHeader<Trailing: View>: View {
         self.trailing = trailing()
     }
 
+    /// Title plus one caption line. Every header is at least this tall and centers its accessory
+    /// in it, so headers of panels side by side end on the same line whatever they carry.
+    static var minHeight: CGFloat { 34 }
+
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
+        HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(Theme.sectionFont)
@@ -111,11 +134,14 @@ struct PanelHeader<Trailing: View>: View {
                     Text(detail)
                         .font(Theme.captionFont)
                         .foregroundStyle(Theme.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                 }
             }
+            .frame(minHeight: Self.minHeight, alignment: detail == nil ? .leading : .topLeading)
             Spacer(minLength: 8)
             trailing
+                .frame(minHeight: Self.minHeight)
         }
     }
 }
@@ -233,7 +259,9 @@ struct PageHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .center, spacing: 16) {
+            // Actions sit level with the title, and the subtitle is one line, so the rule below
+            // lands at the same height on every page.
+            HStack(alignment: .top, spacing: 16) {
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         Text(title)
@@ -255,8 +283,9 @@ struct PageHeader: View {
                     Text(subtitle)
                         .font(Theme.bodyFont)
                         .foregroundStyle(Theme.secondary)
-                        .frame(maxWidth: 620, alignment: .leading)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .help(subtitle)
                 }
                 Spacer(minLength: 20)
                 trailing
@@ -499,5 +528,123 @@ struct Toast: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .strokeBorder(Theme.strokeStrong, lineWidth: 1)
         )
+    }
+}
+
+
+// MARK: - Layout
+
+/// The scrolling frame every page sits in: one set of insets, one max width, centered when the
+/// window is wider. Scroll indicators are `.never` (not `.hidden`, which still shows a scroller
+/// when the system is set to always show them), so the content edge never shifts between pages
+/// that do and don't overflow.
+struct PageScroll<Content: View>: View {
+    var spacing: CGFloat = Theme.gutter
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: spacing) {
+                content
+            }
+            .frame(maxWidth: Theme.contentMaxWidth, alignment: .leading)
+            .padding(.horizontal, Theme.pageInsetH)
+            .padding(.top, Theme.pageInsetTop)
+            .padding(.bottom, Theme.pageInsetBottom)
+            .frame(maxWidth: .infinity)
+        }
+        .scrollIndicators(.never)
+    }
+}
+
+/// Main column plus a fixed-width aside, both stretched to the taller one's height so their
+/// bottoms align. Give the panels inside `Card(fillHeight: true)` (or the last panel of a stacked
+/// column) so their surfaces reach the shared bottom edge.
+struct SplitRow<Main: View, Aside: View>: View {
+    var asideWidth: CGFloat = Theme.asideWidth
+    @ViewBuilder var main: Main
+    @ViewBuilder var aside: Aside
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Theme.gutter) {
+            main
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            aside
+                .frame(width: asideWidth)
+                .frame(maxHeight: .infinity, alignment: .top)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// A 1 pt divider in the stroke color. Use between panel bands and list rows.
+struct Hairline: View {
+    var axis: Axis = .horizontal
+
+    var body: some View {
+        switch axis {
+        case .horizontal:
+            Rectangle().fill(Theme.stroke).frame(height: 1).frame(maxWidth: .infinity)
+        case .vertical:
+            Rectangle().fill(Theme.stroke).frame(width: 1).frame(maxHeight: .infinity)
+        }
+    }
+}
+
+/// The top band of a sectioned panel (`Card(padding: 0)`): title, optional detail and accessory,
+/// with the standard inset and a hairline below.
+struct PanelHeaderBand<Trailing: View>: View {
+    let title: String
+    var detail: String?
+    @ViewBuilder var trailing: Trailing
+
+    init(_ title: String, detail: String? = nil, @ViewBuilder trailing: () -> Trailing = { EmptyView() }) {
+        self.title = title
+        self.detail = detail
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            PanelHeader(title, detail: detail) { trailing }
+                .padding(.horizontal, Theme.panelInset)
+                .padding(.vertical, 14)
+            Hairline()
+        }
+    }
+}
+
+/// One labeled row in a panel: title and optional detail on the left, the control on the right.
+/// Every row has the same minimum height and insets, so trailing controls form one column edge.
+struct FormRow<Control: View>: View {
+    let title: String
+    var detail: String?
+    @ViewBuilder var control: Control
+
+    init(_ title: String, detail: String? = nil, @ViewBuilder control: () -> Control) {
+        self.title = title
+        self.detail = detail
+        self.control = control()
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 16) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(Theme.text)
+                if let detail {
+                    Text(detail)
+                        .font(Theme.captionFont)
+                        .foregroundStyle(Theme.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            control
+        }
+        .frame(minHeight: Theme.rowHeight)
+        .padding(.horizontal, Theme.panelInset)
+        .padding(.vertical, 6)
     }
 }

@@ -27,62 +27,49 @@ struct PerKeyView: View {
     private var keyCount: Int { KeyLayout.f108Pro.keys.count }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                PageHeader(
-                    eyebrow: "USB-C",
-                    title: "Per-key RGB",
-                    subtitle: "Set a color for each key. The keyboard stores one 104-key frame and keeps it after unplugging."
-                ) {
-                    HStack(spacing: 10) {
-                        StatusPill(
-                            text: canSend ? "Ready to send" : "USB-C required",
-                            color: canSend ? Theme.success : Theme.secondary,
-                            icon: canSend ? "checkmark" : "cable.connector"
-                        )
-                        Button {
-                            model.applyPerKey()
-                        } label: {
-                            Label("Apply colors", systemImage: "arrow.down.to.line")
-                        }
-                        .buttonStyle(AccentButtonStyle(enabled: canSend))
-                        .disabled(model.isBusy || !canSend)
+        PageScroll {
+            PageHeader(
+                eyebrow: "USB-C",
+                title: "Per-key RGB",
+                subtitle: "Set a color for each key. The keyboard keeps the frame after unplugging."
+            ) {
+                HStack(spacing: 10) {
+                    StatusPill(
+                        text: canSend ? "Ready to send" : "USB-C required",
+                        color: canSend ? Theme.success : Theme.secondary,
+                        icon: canSend ? nil : "cable.connector"
+                    )
+                    Button {
+                        model.applyPerKey()
+                    } label: {
+                        Label("Apply colors", systemImage: "arrow.down.to.line")
                     }
-                }
-
-                board
-
-                HStack(alignment: .top, spacing: 16) {
-                    inspector
-                        .frame(maxWidth: .infinity)
-                    presets
-                        .frame(width: 300)
+                    .buttonStyle(AccentButtonStyle(enabled: canSend))
+                    .disabled(model.isBusy || !canSend)
                 }
             }
-            .padding(.horizontal, 32)
-            .padding(.top, 28)
-            .padding(.bottom, 32)
+
+            board
+
+            SplitRow {
+                presets
+            } aside: {
+                inspector
+            }
         }
-        .scrollIndicators(.hidden)
     }
 
     // MARK: Board
 
     private var board: some View {
-        Card(padding: 16) {
-            VStack(alignment: .leading, spacing: 14) {
-                PanelHeader("Board", detail: "Click a key to select it, then choose a color.") {
-                    if model.state.perKey.isEmpty {
-                        Text("All keys off")
+        Card(padding: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                PanelHeaderBand("Board", detail: "Click a key to select it, then choose a color.") {
+                    HStack(spacing: 6) {
+                        Text("Painted")
                             .font(Theme.captionFont)
-                            .foregroundStyle(Theme.tertiary)
-                    } else {
-                        HStack(spacing: 6) {
-                            Text("Painted")
-                                .font(Theme.captionFont)
-                                .foregroundStyle(Theme.secondary)
-                            ValueChip("\(model.state.perKey.count)/\(keyCount)")
-                        }
+                            .foregroundStyle(Theme.secondary)
+                        ValueChip("\(model.state.perKey.count)/\(keyCount)")
                     }
                 }
 
@@ -91,8 +78,9 @@ struct PerKeyView: View {
                     selectedKey: model.selectedKey,
                     onTap: { key in model.selectedKey = key.name }
                 )
+                .padding(Theme.panelInset)
 
-                Rectangle().fill(Theme.stroke).frame(height: 1)
+                Hairline()
 
                 HStack(spacing: 16) {
                     legend(text: "Selected") {
@@ -112,6 +100,8 @@ struct PerKeyView: View {
                         .font(Theme.captionFont)
                         .foregroundStyle(Theme.tertiary)
                 }
+                .frame(minHeight: Theme.rowHeight)
+                .padding(.horizontal, Theme.panelInset)
             }
         }
     }
@@ -128,34 +118,23 @@ struct PerKeyView: View {
     // MARK: Inspector
 
     private var inspector: some View {
-        Card(padding: 0) {
+        Card(padding: 0, fillHeight: true) {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .center, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(selectedKey?.label ?? "No key selected")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(Theme.text)
-                        Text(selectedKey.map { "\($0.name) · index \($0.light)" } ?? "Select a key on the board")
-                            .font(Theme.monoFont)
-                            .foregroundStyle(Theme.tertiary)
-                    }
-                    Spacer()
-                    if let selectedKey {
-                        Button {
-                            model.clearPerKey(selectedKey)
-                        } label: {
-                            Label("Clear key", systemImage: "xmark")
-                        }
-                        .buttonStyle(GhostButtonStyle())
-                        .help("Turn this key off")
-                    }
-                }
-                .padding(16)
+                PanelHeaderBand(selectedKey.map(Self.title(for:)) ?? "No key selected", detail: keyStatus)
 
-                divider
+                KeyReadoutStrip(cells: [
+                    ("Key", selectedKey?.name ?? "–"),
+                    ("LED", selectedKey.map { String(format: "%03d", $0.light) } ?? "–"),
+                    ("Color", selectedKey == nil ? "–" : "#\(selectedColor.hex)"),
+                ])
+                .padding(Theme.panelInset)
 
-                VStack(alignment: .leading, spacing: 12) {
+                Hairline()
+
+                VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 10) {
+                        fieldLabel("Color")
+                        Spacer(minLength: 8)
                         ColorPicker(
                             "",
                             selection: Binding(
@@ -168,14 +147,9 @@ struct PerKeyView: View {
                             supportsOpacity: false
                         )
                         .labelsHidden()
-                        .frame(width: 44, height: 28)
+                        .fixedSize()
                         .disabled(selectedKey == nil)
-
-                        Text("Color")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(Theme.secondary)
-                        ValueChip("#\(selectedColor.hex)")
-                        Spacer()
+                        .help("Choose any color")
                     }
 
                     HStack(spacing: 6) {
@@ -192,9 +166,9 @@ struct PerKeyView: View {
                         }
                     }
                 }
-                .padding(16)
+                .padding(Theme.panelInset)
 
-                divider
+                Hairline()
 
                 SliderRow(
                     title: "Global brightness",
@@ -205,75 +179,131 @@ struct PerKeyView: View {
                     range: 0...5, step: 1,
                     valueLabel: "\(model.state.perKeyBrightness)/5"
                 )
-                .padding(16)
+                .padding(Theme.panelInset)
 
-                divider
+                Spacer(minLength: 0)
 
-                HStack(spacing: 8) {
+                Hairline()
+
+                HStack(spacing: 12) {
                     Button {
-                        model.clearAllPerKey()
+                        if let selectedKey { model.clearPerKey(selectedKey) }
                     } label: {
-                        Text("Clear all")
+                        Label("Clear key", systemImage: "xmark")
                     }
                     .buttonStyle(GhostButtonStyle())
-                    Spacer()
-                    Button {
-                        model.applyPerKey()
-                    } label: {
-                        Label("Apply to keyboard", systemImage: "checkmark")
-                    }
-                    .buttonStyle(GhostButtonStyle())
-                    .disabled(model.isBusy || !canSend)
+                    .disabled(selectedKey == nil)
+                    .help("Turn this key off")
+                    Spacer(minLength: 8)
+                    Text("Sent when you apply colors")
+                        .font(Theme.captionFont)
+                        .foregroundStyle(Theme.tertiary)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(Theme.panelInset)
             }
         }
     }
 
-    private var divider: some View {
-        Rectangle().fill(Theme.stroke).frame(height: 1)
+    private var keyStatus: String {
+        guard let key = selectedKey else { return "Select a key on the board." }
+        return model.state.perKey[key.name] == nil ? "Unpainted, off" : "Painted"
+    }
+
+    private static func title(for key: KeyCap) -> String {
+        key.label.isEmpty ? key.name.capitalized : key.label
+    }
+
+    private func fieldLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(Theme.secondary)
     }
 
     // MARK: Presets
 
+    /// Preset tiles stretch to fill the column, so this panel always ends level with the inspector.
     private var presets: some View {
-        Card(padding: 16) {
-            VStack(alignment: .leading, spacing: 12) {
-                PanelHeader("Presets", detail: "Replaces the colors of every key.")
+        Card(padding: 0, fillHeight: true) {
+            VStack(alignment: .leading, spacing: 0) {
+                PanelHeaderBand("Presets", detail: "Replaces the colors of every key.")
 
-                VStack(spacing: 6) {
-                    ForEach(PerKeyPreset.all) { preset in
-                        let colors = preset.colors()
-                        SelectableTile(isSelected: !colors.isEmpty && model.state.perKey == colors) {
-                            model.applyPerKeyPreset(preset)
-                        } label: {
-                            PresetRowLabel(name: preset.name, swatches: Self.swatches(for: colors))
+                let tiles = presetTiles
+                VStack(spacing: 8) {
+                    ForEach(0..<(tiles.count + 1) / 2, id: \.self) { row in
+                        HStack(spacing: 8) {
+                            ForEach(tiles.indices.filter { $0 / 2 == row }, id: \.self) { index in
+                                presetTile(tiles[index])
+                            }
                         }
                     }
-
-                    SelectableTile(isSelected: isFilledWithDefault) {
-                        model.fillPerKey(fillColor)
-                    } label: {
-                        PresetRowLabel(name: "Fill all", swatches: [fillColor])
-                    }
-
-                    SelectableTile(isSelected: model.state.perKey.isEmpty) {
-                        model.clearAllPerKey()
-                    } label: {
-                        PresetRowLabel(name: "Dark", swatches: [])
-                    }
                 }
+                .frame(maxHeight: .infinity)
+                .padding(Theme.panelInset)
 
-                divider
+                Hairline()
 
-                Text("Per-key RGB is stored in firmware and needs USB-C. For per-key behavior over Bluetooth, use Mac Remap.")
+                Text("Per-key RGB is stored in firmware and needs USB-C. For per-key behavior over Bluetooth, use Mac remap.")
                     .font(Theme.captionFont)
                     .foregroundStyle(Theme.tertiary)
                     .lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
+                    .padding(Theme.panelInset)
             }
         }
+    }
+
+    private struct PresetTile {
+        let name: String
+        let swatches: [AulaRGB]
+        let isSelected: Bool
+        let action: () -> Void
+    }
+
+    private var presetTiles: [PresetTile] {
+        var tiles = PerKeyPreset.all.map { preset in
+            let colors = preset.colors()
+            return PresetTile(
+                name: preset.name,
+                swatches: Self.swatches(for: colors),
+                isSelected: !colors.isEmpty && model.state.perKey == colors,
+                action: { model.applyPerKeyPreset(preset) }
+            )
+        }
+        tiles.append(PresetTile(
+            name: "Fill all",
+            swatches: [fillColor],
+            isSelected: isFilledWithDefault,
+            action: { model.fillPerKey(fillColor) }
+        ))
+        tiles.append(PresetTile(
+            name: "Clear all",
+            swatches: [],
+            isSelected: model.state.perKey.isEmpty,
+            action: { model.clearAllPerKey() }
+        ))
+        return tiles
+    }
+
+    private func presetTile(_ tile: PresetTile) -> some View {
+        SelectableTile(isSelected: tile.isSelected, action: tile.action) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text(tile.name)
+                        .font(.system(size: 12.5, weight: tile.isSelected ? .semibold : .medium))
+                        .foregroundStyle(Theme.text)
+                    Spacer(minLength: 8)
+                    if tile.swatches.isEmpty {
+                        Text("All keys off")
+                            .font(Theme.captionFont)
+                            .foregroundStyle(Theme.tertiary)
+                    }
+                }
+                Spacer(minLength: 0)
+                PresetStrip(colors: tile.swatches.isEmpty ? [unlitColor] : tile.swatches)
+            }
+            .frame(maxHeight: .infinity, alignment: .topLeading)
+        }
+        .frame(maxHeight: .infinity)
     }
 
     private var isFilledWithDefault: Bool {
@@ -281,7 +311,7 @@ struct PerKeyView: View {
         return painted.count == keyCount && painted.values.allSatisfy { $0 == fillColor }
     }
 
-    /// The distinct colors a preset uses, in board order, so each row previews what it will paint.
+    /// The distinct colors a preset uses, in board order, so each tile previews what it will paint.
     private static func swatches(for colors: [String: AulaRGB]) -> [AulaRGB] {
         var seen = Set<AulaRGB>()
         var result: [AulaRGB] = []
@@ -294,35 +324,26 @@ struct PerKeyView: View {
     }
 }
 
-private struct PresetRowLabel: View {
-    let name: String
-    let swatches: [AulaRGB]
+/// A full-width bar of equal segments previewing a preset's colors.
+private struct PresetStrip: View {
+    let colors: [AulaRGB]
 
     var body: some View {
-        HStack(spacing: 10) {
-            Text(name)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Theme.text)
-            Spacer(minLength: 8)
-            if swatches.isEmpty {
-                Text("off")
-                    .font(Theme.monoFont)
-                    .foregroundStyle(Theme.tertiary)
-            } else {
-                HStack(spacing: 2) {
-                    ForEach(Array(swatches.enumerated()), id: \.offset) { _, color in
-                        Rectangle()
-                            .fill(Color(color))
-                            .frame(width: 10, height: 10)
-                    }
-                }
-                .padding(1)
-                .overlay(Rectangle().strokeBorder(Theme.stroke, lineWidth: 1))
+        HStack(spacing: 2) {
+            ForEach(Array(colors.enumerated()), id: \.offset) { _, color in
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(Color(color))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                            .strokeBorder(Theme.stroke, lineWidth: 1)
+                    )
             }
         }
+        .frame(height: 10)
     }
 }
 
+/// One palette color. The selection ring is drawn inside the swatch so the row keeps exact edges.
 private struct PaletteSwatch: View {
     let color: AulaRGB
     let isSelected: Bool
@@ -333,15 +354,18 @@ private struct PaletteSwatch: View {
         Button(action: action) {
             RoundedRectangle(cornerRadius: 4, style: .continuous)
                 .fill(Color(color))
-                .frame(height: 22)
+                .frame(height: 24)
                 .overlay(
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .strokeBorder(hovering ? Theme.strokeStrong : Theme.stroke, lineWidth: 1)
+                        .strokeBorder(
+                            isSelected ? Theme.accent : (hovering ? Theme.strokeStrong : Theme.stroke),
+                            lineWidth: isSelected ? 2 : 1
+                        )
                 )
-                .padding(2)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .strokeBorder(isSelected ? Theme.accent : Color.clear, lineWidth: 1.5)
+                    RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                        .strokeBorder(Color.black.opacity(isSelected ? 0.55 : 0), lineWidth: 1)
+                        .padding(2)
                 )
                 .contentShape(Rectangle())
         }

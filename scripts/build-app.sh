@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 APP_NAME="AULA Control"
 BUNDLE="dist/${APP_NAME}.app"
 BUILD_CONFIG="${CONFIG:-release}"
-VERSION="${VERSION:-1.0.0}"
+VERSION="${VERSION:-1.0.1}"
 
 # Universal (Apple silicon + Intel) by default; ARCH=native builds only for this Mac, which is faster.
 ARCH_FLAGS=(--arch arm64 --arch x86_64)
@@ -70,7 +70,7 @@ cat > "$BUNDLE/Contents/Info.plist" <<PLIST
     <key>NSInputMonitoringUsageDescription</key>
     <string>AULA Control reads HID reports to identify your F108 Pro and configure it. Key events are only read when you enable macOS remapping.</string>
     <key>NSBluetoothAlwaysUsageDescription</key>
-    <string>AULA Control detects when your AULA keyboard is connected over Bluetooth so it can enable macOS-level remapping.</string>
+    <string>AULA Control reads your AULA keyboard's battery level over Bluetooth.</string>
     <key>NSHumanReadableCopyright</key>
     <string>Not affiliated with AULA. Built for the AULA F108 Pro.</string>
     <key>CFBundleIconFile</key>

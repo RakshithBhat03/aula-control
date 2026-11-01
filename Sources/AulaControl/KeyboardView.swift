@@ -28,38 +28,53 @@ struct KeyboardView: View {
         self.onTap = onTap
     }
 
-    var body: some View {
-        GeometryReader { geometry in
-            let deckPadding: CGFloat = 14
-            let unit = (geometry.size.width - deckPadding * 2) / layout.widthUnits
-            let gap: CGFloat = max(1.5, unit * 0.06)
+    /// Board width, measured once per resize. A GeometryReader here would re-run on every scroll
+    /// frame (its proxy tracks window position) and rebuild all 104 caps, which made scrolling stutter.
+    @State private var width: CGFloat = 0
 
-            ZStack(alignment: .topLeading) {
-                deck
-                ForEach(layout.keys) { key in
-                    KeyCapView(
-                        key: key,
-                        unit: unit,
-                        color: colorFor(key),
-                        isSelected: selectedKey == key.name,
-                        isMapped: mappedKeys.contains(key.name),
-                        showMappedDot: showRemapDot
-                    ) {
-                        onTap?(key)
-                    }
-                    .frame(
-                        width: max(1, key.width * unit - gap),
-                        height: max(1, key.height * unit - gap)
-                    )
-                    .offset(
-                        x: deckPadding + key.x * unit + gap / 2,
-                        y: deckPadding + key.y * unit + gap / 2
-                    )
-                    .disabled(!isInteractive)
+    private let deckPadding: CGFloat = 14
+
+    var body: some View {
+        Color.clear
+            .aspectRatio(3.36, contentMode: .fit)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+            .overlay(alignment: .topLeading) {
+                if width > 0 { board(width: width) }
+            }
+    }
+
+    private func board(width: CGFloat) -> some View {
+        let unit = (width - deckPadding * 2) / layout.widthUnits
+        let gap: CGFloat = max(1.5, unit * 0.06)
+
+        return ZStack(alignment: .topLeading) {
+            deck
+            ForEach(layout.keys) { key in
+                let size = CGSize(
+                    width: max(1, key.width * unit - gap),
+                    height: max(1, key.height * unit - gap)
+                )
+                KeyCapView(
+                    key: key,
+                    unit: unit,
+                    size: size,
+                    color: colorFor(key),
+                    isSelected: selectedKey == key.name,
+                    isMapped: mappedKeys.contains(key.name),
+                    showMappedDot: showRemapDot
+                ) {
+                    onTap?(key)
                 }
+                .equatable()
+                .frame(width: size.width, height: size.height)
+                .offset(
+                    x: deckPadding + key.x * unit + gap / 2,
+                    y: deckPadding + key.y * unit + gap / 2
+                )
+                .disabled(!isInteractive)
             }
         }
-        .aspectRatio(3.36, contentMode: .fit)
+        .drawingGroup()
     }
 
     /// The case plate. Flat and slightly darker than the page so the caps sit on it.
@@ -75,9 +90,10 @@ struct KeyboardView: View {
 
 /// One keycap, drawn as a physical cap: a darker skirt with an inset top face. A lit key carries
 /// its LED color on the face; an unlit key is plain graphite.
-struct KeyCapView: View {
+struct KeyCapView: View, Equatable {
     let key: KeyCap
     let unit: CGFloat
+    let size: CGSize
     let color: AulaRGB?
     let isSelected: Bool
     let isMapped: Bool
@@ -85,6 +101,14 @@ struct KeyCapView: View {
     let action: () -> Void
 
     @State private var hovering = false
+
+    /// Skips rebuilding caps whose inputs are unchanged; the tap closure is recreated on every parent
+    /// render and would otherwise defeat SwiftUI's diffing for all 104 keys.
+    static func == (lhs: KeyCapView, rhs: KeyCapView) -> Bool {
+        lhs.key.name == rhs.key.name && lhs.unit == rhs.unit && lhs.size == rhs.size && lhs.color == rhs.color
+            && lhs.isSelected == rhs.isSelected && lhs.isMapped == rhs.isMapped
+            && lhs.showMappedDot == rhs.showMappedDot
+    }
 
     private var lit: Bool {
         let sum = Int(color?.r ?? 0) + Int(color?.g ?? 0) + Int(color?.b ?? 0)
@@ -115,11 +139,11 @@ struct KeyCapView: View {
 
     var body: some View {
         Button(action: action) {
-            GeometryReader { geo in
-                let height = geo.size.height
-                let width = geo.size.width
+            ZStack {
+                let height = size.height
+                let width = size.width
                 let isWide = width > height * 1.45
-                let primary = min(width * 0.26, height * 0.30, isWide ? 13 : 12.5)
+                let primary = max(8, min(width * 0.26, height * 0.30, isWide ? 13 : 12.5))
                 let secondary = min(width * 0.17, height * 0.18, 10)
                 let radius = max(3, unit * 0.10)
                 let side = max(1.5, unit * 0.06)
@@ -166,6 +190,8 @@ struct KeyCapView: View {
                 .offset(y: hovering ? 0.5 : 0)
                 .animation(.easeOut(duration: 0.1), value: hovering)
             }
+            .frame(width: size.width, height: size.height)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
@@ -183,7 +209,7 @@ struct KeyCapView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.55)
                 }
-                if let sub = key.sublabel {
+                if let sub = key.sublabel, unit >= 30 {
                     Text(sub)
                         .font(.system(size: secondary))
                         .foregroundStyle(labelColor.opacity(0.55))
@@ -197,7 +223,7 @@ struct KeyCapView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         } else {
             VStack(alignment: .leading, spacing: 0) {
-                if let sub = key.sublabel, key.name != "space" {
+                if let sub = key.sublabel, key.name != "space", unit >= 30 {
                     Text(sub)
                         .font(.system(size: secondary))
                         .foregroundStyle(labelColor.opacity(0.55))

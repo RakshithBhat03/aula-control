@@ -56,8 +56,8 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .perKey: return "⌘3"
         case .keymap: return "⌘4"
         case .macros: return "⌘5"
-        case .macRemap: return "⌘6"
-        case .device: return "⌘7"
+        case .device: return "⌘6"
+        case .macRemap: return "⌘7"
         case .settings: return "⌘8"
         }
     }
@@ -67,7 +67,7 @@ enum RemapLayer: String, CaseIterable, Identifiable {
     case normal
     case fn
     var id: String { rawValue }
-    var title: String { self == .normal ? "Normal layer" : "FN layer" }
+    var title: String { self == .normal ? "Normal layer" : "Fn layer" }
 }
 
 struct StatusMessage: Identifiable, Equatable {
@@ -75,6 +75,35 @@ struct StatusMessage: Identifiable, Equatable {
     let id = UUID()
     let kind: Kind
     let text: String
+}
+
+/// System state gathered by the poll. Every probe here is safe to call off the main thread.
+struct SystemSnapshot: Sendable {
+    struct Permissions: Sendable {
+        var accessibility: Bool
+        var inputMonitoring: Bool
+        var karabiner: Bool
+        var launchAtLogin: Bool
+
+        static func capture() -> Permissions {
+            Permissions(
+                accessibility: AulaPermissions.accessibility,
+                inputMonitoring: AulaPermissions.inputMonitoring,
+                karabiner: AulaDiscovery.karabinerVirtualKeyboardPresent(),
+                launchAtLogin: LaunchAtLogin.isEnabled
+            )
+        }
+    }
+
+    var permissions: Permissions
+    var connection: AulaConnectionInfo?
+
+    static func capture(includeConnection: Bool) -> SystemSnapshot {
+        SystemSnapshot(
+            permissions: .capture(),
+            connection: includeConnection ? AulaDiscovery.detect() : nil
+        )
+    }
 }
 
 @MainActor
@@ -92,6 +121,7 @@ final class AppModel: ObservableObject {
     @Published var focusMacroID: UUID?
     @Published var demoMode = false {
         didSet {
+            pollGeneration += 1
             closeDevice()
             if demoMode {
                 connection = AulaConnectionInfo(
@@ -105,6 +135,7 @@ final class AppModel: ObservableObject {
                     productID: F108.productID
                 )
                 showToast(.info, "Preview mode: changes are simulated, not sent to the keyboard.")
+                updateBatteryMonitoring()
             } else {
                 refreshConnection(force: true)
             }
@@ -118,10 +149,21 @@ final class AppModel: ObservableObject {
     @Published var lastKeySource: String?
     @Published var karabinerPresent = false
     @Published var launchAtLogin = LaunchAtLogin.isEnabled
+    /// Keyboard battery level, when the current link reports one (Bluetooth or the 2.4 GHz dongle).
+    /// USB-C has no battery report, so this stays nil while wired.
+    @Published var batteryPercent: Int?
 
     let store: AulaStore
     private let remapper = KeyboardRemapper()
     private var pollTimer: Timer?
+    private var pollInFlight = false
+    /// Bumped by every direct update, so a poll snapshot taken before it is dropped instead of
+    /// overwriting newer values (e.g. snapping the Launch at login toggle back off).
+    private var pollGeneration = 0
+    private let pollQueue = DispatchQueue(label: "com.aulacontrol.poll", qos: .utility)
+    private let bluetoothBattery = BluetoothBatteryMonitor()
+    private var dongleBatteryTimer: Timer?
+    private let batteryQueue = DispatchQueue(label: "com.aulacontrol.battery", qos: .utility)
     private var saveWork: DispatchWorkItem?
     private var toastWork: DispatchWorkItem?
 
@@ -163,6 +205,10 @@ final class AppModel: ObservableObject {
                 if self.lastKeySource != name { self.lastKeySource = name }
             }
         }
+        // Lets screenshot tooling open the app on a given page, e.g. AULA_SECTION=lighting.
+        if let raw = ProcessInfo.processInfo.environment["AULA_SECTION"], let section = AppSection(rawValue: raw) {
+            self.section = section
+        }
         refreshConnection(force: true)
         startPolling()
         updateRemapperConfiguration()
@@ -179,17 +225,42 @@ final class AppModel: ObservableObject {
 
     private func startPolling() {
         pollTimer = Timer.scheduledTimer(withTimeInterval: 1.6, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.refreshConnection() }
+            Task { @MainActor in self?.pollInBackground() }
+        }
+    }
+
+    /// The periodic check runs off the main thread: the permission and HID probes take ~10 ms,
+    /// which dropped a frame every poll while scrolling.
+    private func pollInBackground() {
+        guard !pollInFlight else { return }
+        pollInFlight = true
+        let generation = pollGeneration
+        let includeConnection = !demoMode
+        pollQueue.async { [weak self] in
+            let snapshot = SystemSnapshot.capture(includeConnection: includeConnection)
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.pollInFlight = false
+                guard generation == self.pollGeneration else { return }
+                self.apply(snapshot.permissions)
+                if let connection = snapshot.connection, !self.demoMode {
+                    self.applyConnection(connection, force: false)
+                }
+            }
         }
     }
 
     func refreshConnection(force: Bool = false) {
         refreshPermissions()
         guard !demoMode else { return }
-        let new = AulaDiscovery.detect()
+        applyConnection(AulaDiscovery.detect(), force: force)
+    }
+
+    private func applyConnection(_ new: AulaConnectionInfo, force: Bool) {
         if force || new.kind != connection.kind || new.product != connection.product || new.uniqueID != connection.uniqueID {
             let wasWired = connection.kind == .wired
             connection = new
+            updateBatteryMonitoring()
             if new.kind != .wired {
                 closeDevice()
             }
@@ -206,13 +277,63 @@ final class AppModel: ObservableObject {
     }
 
     func refreshPermissions() {
-        accessibilityGranted = AulaPermissions.accessibility
-        inputMonitoringGranted = AulaPermissions.inputMonitoring
-        karabinerPresent = AulaDiscovery.karabinerVirtualKeyboardPresent()
+        pollGeneration += 1
+        apply(SystemSnapshot.Permissions.capture())
+    }
+
+    /// Assigns only what changed. Every @Published assignment re-renders the visible page, even
+    /// when the value is the same.
+    private func apply(_ permissions: SystemSnapshot.Permissions) {
+        if accessibilityGranted != permissions.accessibility { accessibilityGranted = permissions.accessibility }
+        if inputMonitoringGranted != permissions.inputMonitoring { inputMonitoringGranted = permissions.inputMonitoring }
+        if karabinerPresent != permissions.karabiner { karabinerPresent = permissions.karabiner }
+        if launchAtLogin != permissions.launchAtLogin { launchAtLogin = permissions.launchAtLogin }
         if state.macRemap.enabled && !remapRunning && accessibilityGranted {
             startRemapperIfPossible()
         }
-        launchAtLogin = LaunchAtLogin.isEnabled
+    }
+
+    // MARK: - Battery
+
+    /// Starts the battery reader that matches the link: Bluetooth reads the GATT Battery Service,
+    /// the dongle answers a read-only vendor query every 30 s, and USB-C has no battery report.
+    private func updateBatteryMonitoring() {
+        let kind = demoMode ? AulaConnectionKind.absent : connection.kind
+        if kind != .bluetooth { bluetoothBattery.stop() }
+        if kind != .dongle {
+            dongleBatteryTimer?.invalidate()
+            dongleBatteryTimer = nil
+        }
+        switch kind {
+        case .bluetooth:
+            setBattery(nil) // Don't carry a dongle reading over to the Bluetooth link.
+            bluetoothBattery.onChange = { [weak self] level in
+                DispatchQueue.main.async { self?.setBattery(level) }
+            }
+            bluetoothBattery.start()
+        case .dongle:
+            guard dongleBatteryTimer == nil else { return }
+            readDongleBattery()
+            dongleBatteryTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+                Task { @MainActor in self?.readDongleBattery() }
+            }
+        case .wired, .absent:
+            setBattery(nil)
+        }
+    }
+
+    private func readDongleBattery() {
+        batteryQueue.async { [weak self] in
+            let level = AulaBattery.readFromDongle()
+            DispatchQueue.main.async {
+                guard let self, self.connection.kind == .dongle else { return }
+                self.setBattery(level)
+            }
+        }
+    }
+
+    private func setBattery(_ level: Int?) {
+        if batteryPercent != level { batteryPercent = level }
     }
 
     // MARK: - Device operations
@@ -413,6 +534,7 @@ final class AppModel: ObservableObject {
 
     func requestAccessibility() {
         let granted = AulaPermissions.requestAccessibility()
+        pollGeneration += 1
         accessibilityGranted = granted
         AulaPermissions.openAccessibilitySettings()
         showToast(.info, "Enable AULA Control under Privacy & Security → Accessibility, then return here.")
@@ -420,6 +542,7 @@ final class AppModel: ObservableObject {
 
     func requestInputMonitoring() {
         _ = AulaPermissions.requestInputMonitoring()
+        pollGeneration += 1
         inputMonitoringGranted = AulaPermissions.inputMonitoring
         AulaPermissions.openInputMonitoringSettings()
         showToast(.info, "Enable AULA Control under Privacy & Security → Input Monitoring, then relaunch.")
@@ -440,12 +563,14 @@ final class AppModel: ObservableObject {
     func setLaunchAtLogin(_ enabled: Bool) {
         do {
             try LaunchAtLogin.set(enabled)
+            pollGeneration += 1
             launchAtLogin = LaunchAtLogin.isEnabled
             if LaunchAtLogin.requiresApproval {
                 LaunchAtLogin.openSettings()
                 showToast(.info, "Allow AULA Control in System Settings → General → Login Items.")
             }
         } catch {
+            pollGeneration += 1
             launchAtLogin = LaunchAtLogin.isEnabled
             showToast(.error, "Could not update login item: \(error.localizedDescription)")
         }
