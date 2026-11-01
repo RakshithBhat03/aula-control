@@ -198,6 +198,10 @@ final class AppModel: ObservableObject {
                 if self.lastKeySource != name { self.lastKeySource = name }
             }
         }
+        // Lets screenshot tooling open the app on a given page, e.g. AULA_SECTION=lighting.
+        if let raw = ProcessInfo.processInfo.environment["AULA_SECTION"], let section = AppSection(rawValue: raw) {
+            self.section = section
+        }
         refreshConnection(force: true)
         startPolling()
         updateRemapperConfiguration()
