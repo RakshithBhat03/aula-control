@@ -525,7 +525,8 @@ struct Toast: View {
 // MARK: - Layout
 
 /// The scrolling frame every page sits in: one set of insets, one max width, centered when the
-/// window is wider. Scroll indicators are hidden so the content edge never shifts between pages
+/// window is wider. Scroll indicators are `.never` (not `.hidden`, which still shows a scroller
+/// when the system is set to always show them), so the content edge never shifts between pages
 /// that do and don't overflow.
 struct PageScroll<Content: View>: View {
     var spacing: CGFloat = Theme.gutter
@@ -542,7 +543,7 @@ struct PageScroll<Content: View>: View {
             .padding(.bottom, Theme.pageInsetBottom)
             .frame(maxWidth: .infinity)
         }
-        .scrollIndicators(.hidden)
+        .scrollIndicators(.never)
     }
 }
 

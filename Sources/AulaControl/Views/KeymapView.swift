@@ -179,39 +179,8 @@ struct KeymapView: View {
     }
 
     private var mappingList: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Text("Mappings in this layer")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Theme.secondary)
-                Spacer(minLength: 8)
-                if mappedKeysInOrder.isEmpty {
-                    Text("None yet")
-                        .font(Theme.captionFont)
-                        .foregroundStyle(Theme.tertiary)
-                } else {
-                    ValueChip("\(mappedKeysInOrder.count)")
-                }
-            }
-            if !mappedKeysInOrder.isEmpty {
-                LazyVGrid(
-                    columns: [GridItem(.adaptive(minimum: 170), spacing: 8, alignment: .leading)],
-                    alignment: .leading,
-                    spacing: 8
-                ) {
-                    ForEach(mappedKeysInOrder) { key in
-                        if let action = map[key.name] {
-                            MappingRow(
-                                source: key,
-                                action: action,
-                                isSelected: selectedKey?.name == key.name
-                            ) {
-                                model.selectedKey = key.name
-                            }
-                        }
-                    }
-                }
-            }
+        MappingList(title: "Mappings in this layer", keys: mappedKeysInOrder, map: map, selectedKey: selectedKey?.name) {
+            model.selectedKey = $0
         }
     }
 
@@ -277,48 +246,6 @@ struct KeymapView: View {
         if model.selectedLayer == .normal { model.state.keymap = [:] }
         else { model.state.fnKeymap = [:] }
         model.showToast(.info, "Layer cleared locally. Press Apply keymap to write it.")
-    }
-}
-
-/// One source key and what it now sends. Clicking it selects the key, mirroring a tap on the board.
-private struct MappingRow: View {
-    let source: KeyCap
-    let action: KeyAction
-    let isSelected: Bool
-    let onSelect: () -> Void
-
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: onSelect) {
-            HStack(spacing: 8) {
-                KeyTag(source.label.isEmpty ? source.name : source.label)
-                Image(systemName: "arrow.right")
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundStyle(Theme.tertiary)
-                Text(action.displayName)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
-                    .fill(isSelected ? Theme.accent.opacity(0.10) : (hovering ? Theme.cardRaised : Theme.field))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
-                    .strokeBorder(isSelected ? Theme.accent.opacity(0.85) : Theme.stroke, lineWidth: 1)
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .help("\(source.name) sends \(action.displayName)")
-        .accessibilityLabel("\(source.label) key sends \(action.displayName)")
     }
 }
 

@@ -250,28 +250,52 @@ struct MacRemapView: View {
                     }
                 }
 
-                VStack(alignment: .leading, spacing: 12) {
-                    KeyboardView(
-                        colorFor: { key in
-                            guard map[key.name] != nil else { return nil }
-                            return Self.mappedKeyTint
-                        },
-                        selectedKey: selectedKey?.name,
-                        mappedKeys: Set(map.keys),
-                        showRemapDot: true,
-                        onTap: { key in model.selectedKey = key.name }
-                    )
-                    .opacity(model.state.macRemap.enabled ? 1 : 0.72)
+                KeyboardView(
+                    colorFor: { key in
+                        guard map[key.name] != nil else { return nil }
+                        return Self.mappedKeyTint
+                    },
+                    selectedKey: selectedKey?.name,
+                    mappedKeys: Set(map.keys),
+                    showRemapDot: true,
+                    onTap: { key in model.selectedKey = key.name }
+                )
+                .opacity(model.state.macRemap.enabled ? 1 : 0.72)
+                .padding(Theme.panelInset)
 
+                Hairline()
+
+                HStack(spacing: 16) {
                     HStack(spacing: 6) {
                         RoundedRectangle(cornerRadius: 1, style: .continuous)
                             .fill(Theme.accent)
                             .frame(width: 5, height: 5)
+                            .frame(width: 10, height: 10)
                         Text("Remapped in macOS")
-                            .font(Theme.captionFont)
-                            .foregroundStyle(Theme.tertiary)
                     }
+                    HStack(spacing: 6) {
+                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                            .strokeBorder(Theme.accent, lineWidth: 1.5)
+                            .frame(width: 10, height: 10)
+                        Text("Selected")
+                    }
+                    Spacer(minLength: 12)
+                    Text(model.state.macRemap.enabled ? "Active while the app runs." : "Remapping is off.")
+                        .foregroundStyle(Theme.tertiary)
                 }
+                .font(Theme.captionFont)
+                .foregroundStyle(Theme.secondary)
+                .frame(minHeight: Theme.rowHeight)
+                .padding(.horizontal, Theme.panelInset)
+
+                Hairline()
+
+                MappingList(
+                    title: "Remapped keys",
+                    keys: KeyLayout.f108Pro.keys.filter { map[$0.name] != nil },
+                    map: map,
+                    selectedKey: selectedKey?.name
+                ) { model.selectedKey = $0 }
                 .padding(Theme.panelInset)
 
                 // Presets sit on the panel's bottom edge so they line up with the inspector's
