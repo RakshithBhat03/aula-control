@@ -263,7 +263,62 @@ struct WindowConfigurator: NSViewRepresentable {
     func updateNSView(_ nsView: NSView, context: Context) {}
 }
 
+/// Finds and restores the main window. The app keeps running after its window closes so Mac remap
+/// stays active; this brings the window back from the Dock, the Window menu and the Keyboard menu.
+@MainActor
+enum MainWindow {
+    static let id = "main"
+    static let menuTitle = "AULA Control"
+
+    /// The main window if it is on screen or minimized. Closed windows can linger in
+    /// `NSApp.windows` but are neither, so they are skipped.
+    private static var existing: NSWindow? {
+        NSApp.windows.first { $0.canBecomeMain && ($0.isVisible || $0.isMiniaturized) }
+    }
+
+    static func show(open: (() -> Void)? = nil) {
+        NSApp.activate(ignoringOtherApps: true)
+        if let window = existing {
+            if window.isMiniaturized { window.deminiaturize(nil) }
+            window.makeKeyAndOrderFront(nil)
+        } else if let open {
+            open()
+        } else {
+            openFromWindowMenu()
+        }
+    }
+
+    /// SwiftUI only hands out `openWindow` inside views, so code outside a view (the Dock handler)
+    /// runs the Window menu item that owns it.
+    private static func openFromWindowMenu() {
+        guard let menu = NSApp.windowsMenu ?? NSApp.mainMenu?.item(withTitle: "Window")?.submenu,
+              let index = menu.items.firstIndex(where: { $0.title == menuTitle && $0.keyEquivalent == "0" })
+        else { return }
+        menu.performActionForItem(at: index)
+    }
+}
+
+/// Window → AULA Control (⌘0): reopens the main window, or focuses it if it is already open.
+struct ShowMainWindowButton: View {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Button(MainWindow.menuTitle) {
+            MainWindow.show { openWindow(id: MainWindow.id) }
+        }
+        .keyboardShortcut("0", modifiers: .command)
+    }
+}
+
 final class AulaAppDelegate: NSObject, NSApplicationDelegate {
+    /// Dock click with no window on screen: bring the main window back. Returning false stops AppKit
+    /// from also running its default reopen, which would otherwise do nothing for this app.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        guard !flag else { return true }
+        MainActor.assumeIsolated { MainWindow.show() }
+        return false
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.activate(ignoringOtherApps: true)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
@@ -281,8 +336,14 @@ struct AulaControlApp: App {
     @NSApplicationDelegateAdaptor(AulaAppDelegate.self) private var appDelegate
     @StateObject private var model = AppModel()
 
+    /// Switches page and brings the window back if it was closed.
+    private func show(_ section: AppSection) {
+        model.section = section
+        MainWindow.show()
+    }
+
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: MainWindow.id) {
             RootView()
                 .environmentObject(model)
                 .preferredColorScheme(.dark)
@@ -290,18 +351,22 @@ struct AulaControlApp: App {
         .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(replacing: .newItem) {}
+            CommandGroup(before: .windowArrangement) {
+                ShowMainWindowButton()
+                Divider()
+            }
             CommandMenu("Keyboard") {
                 Button("Apply Saved Configuration") { model.pushAll() }
                     .keyboardShortcut("r", modifiers: [.command, .shift])
                 Divider()
-                Button("Overview") { model.section = .overview }.keyboardShortcut("1", modifiers: .command)
-                Button("Lighting") { model.section = .lighting }.keyboardShortcut("2", modifiers: .command)
-                Button("Per-Key RGB") { model.section = .perKey }.keyboardShortcut("3", modifiers: .command)
-                Button("Keymap") { model.section = .keymap }.keyboardShortcut("4", modifiers: .command)
-                Button("Macros") { model.section = .macros }.keyboardShortcut("5", modifiers: .command)
-                Button("Mac Remap") { model.section = .macRemap }.keyboardShortcut("6", modifiers: .command)
-                Button("Device") { model.section = .device }.keyboardShortcut("7", modifiers: .command)
-                Button("Settings") { model.section = .settings }.keyboardShortcut("8", modifiers: .command)
+                Button("Overview") { show(.overview) }.keyboardShortcut("1", modifiers: .command)
+                Button("Lighting") { show(.lighting) }.keyboardShortcut("2", modifiers: .command)
+                Button("Per-Key RGB") { show(.perKey) }.keyboardShortcut("3", modifiers: .command)
+                Button("Keymap") { show(.keymap) }.keyboardShortcut("4", modifiers: .command)
+                Button("Macros") { show(.macros) }.keyboardShortcut("5", modifiers: .command)
+                Button("Mac Remap") { show(.macRemap) }.keyboardShortcut("6", modifiers: .command)
+                Button("Device") { show(.device) }.keyboardShortcut("7", modifiers: .command)
+                Button("Settings") { show(.settings) }.keyboardShortcut("8", modifiers: .command)
                 Divider()
                 Button("New Macro") { model.addMacro() }.keyboardShortcut("n", modifiers: .command)
                 Button(model.demoMode ? "Exit Preview Mode" : "Enter Preview Mode") {

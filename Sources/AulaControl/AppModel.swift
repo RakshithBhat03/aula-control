@@ -77,6 +77,35 @@ struct StatusMessage: Identifiable, Equatable {
     let text: String
 }
 
+/// System state gathered by the poll. Every probe here is safe to call off the main thread.
+struct SystemSnapshot: Sendable {
+    struct Permissions: Sendable {
+        var accessibility: Bool
+        var inputMonitoring: Bool
+        var karabiner: Bool
+        var launchAtLogin: Bool
+
+        static func capture() -> Permissions {
+            Permissions(
+                accessibility: AulaPermissions.accessibility,
+                inputMonitoring: AulaPermissions.inputMonitoring,
+                karabiner: AulaDiscovery.karabinerVirtualKeyboardPresent(),
+                launchAtLogin: LaunchAtLogin.isEnabled
+            )
+        }
+    }
+
+    var permissions: Permissions
+    var connection: AulaConnectionInfo?
+
+    static func capture(includeConnection: Bool) -> SystemSnapshot {
+        SystemSnapshot(
+            permissions: .capture(),
+            connection: includeConnection ? AulaDiscovery.detect() : nil
+        )
+    }
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published var section: AppSection = .overview
@@ -92,6 +121,7 @@ final class AppModel: ObservableObject {
     @Published var focusMacroID: UUID?
     @Published var demoMode = false {
         didSet {
+            pollGeneration += 1
             closeDevice()
             if demoMode {
                 connection = AulaConnectionInfo(
@@ -122,6 +152,11 @@ final class AppModel: ObservableObject {
     let store: AulaStore
     private let remapper = KeyboardRemapper()
     private var pollTimer: Timer?
+    private var pollInFlight = false
+    /// Bumped by every direct update, so a poll snapshot taken before it is dropped instead of
+    /// overwriting newer values (e.g. snapping the Launch at login toggle back off).
+    private var pollGeneration = 0
+    private let pollQueue = DispatchQueue(label: "com.aulacontrol.poll", qos: .utility)
     private var saveWork: DispatchWorkItem?
     private var toastWork: DispatchWorkItem?
 
@@ -179,14 +214,38 @@ final class AppModel: ObservableObject {
 
     private func startPolling() {
         pollTimer = Timer.scheduledTimer(withTimeInterval: 1.6, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.refreshConnection() }
+            Task { @MainActor in self?.pollInBackground() }
+        }
+    }
+
+    /// The periodic check runs off the main thread: the permission and HID probes take ~10 ms,
+    /// which dropped a frame every poll while scrolling.
+    private func pollInBackground() {
+        guard !pollInFlight else { return }
+        pollInFlight = true
+        let generation = pollGeneration
+        let includeConnection = !demoMode
+        pollQueue.async { [weak self] in
+            let snapshot = SystemSnapshot.capture(includeConnection: includeConnection)
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.pollInFlight = false
+                guard generation == self.pollGeneration else { return }
+                self.apply(snapshot.permissions)
+                if let connection = snapshot.connection, !self.demoMode {
+                    self.applyConnection(connection, force: false)
+                }
+            }
         }
     }
 
     func refreshConnection(force: Bool = false) {
         refreshPermissions()
         guard !demoMode else { return }
-        let new = AulaDiscovery.detect()
+        applyConnection(AulaDiscovery.detect(), force: force)
+    }
+
+    private func applyConnection(_ new: AulaConnectionInfo, force: Bool) {
         if force || new.kind != connection.kind || new.product != connection.product || new.uniqueID != connection.uniqueID {
             let wasWired = connection.kind == .wired
             connection = new
@@ -206,13 +265,20 @@ final class AppModel: ObservableObject {
     }
 
     func refreshPermissions() {
-        accessibilityGranted = AulaPermissions.accessibility
-        inputMonitoringGranted = AulaPermissions.inputMonitoring
-        karabinerPresent = AulaDiscovery.karabinerVirtualKeyboardPresent()
+        pollGeneration += 1
+        apply(SystemSnapshot.Permissions.capture())
+    }
+
+    /// Assigns only what changed. Every @Published assignment re-renders the visible page, even
+    /// when the value is the same.
+    private func apply(_ permissions: SystemSnapshot.Permissions) {
+        if accessibilityGranted != permissions.accessibility { accessibilityGranted = permissions.accessibility }
+        if inputMonitoringGranted != permissions.inputMonitoring { inputMonitoringGranted = permissions.inputMonitoring }
+        if karabinerPresent != permissions.karabiner { karabinerPresent = permissions.karabiner }
+        if launchAtLogin != permissions.launchAtLogin { launchAtLogin = permissions.launchAtLogin }
         if state.macRemap.enabled && !remapRunning && accessibilityGranted {
             startRemapperIfPossible()
         }
-        launchAtLogin = LaunchAtLogin.isEnabled
     }
 
     // MARK: - Device operations
@@ -413,6 +479,7 @@ final class AppModel: ObservableObject {
 
     func requestAccessibility() {
         let granted = AulaPermissions.requestAccessibility()
+        pollGeneration += 1
         accessibilityGranted = granted
         AulaPermissions.openAccessibilitySettings()
         showToast(.info, "Enable AULA Control under Privacy & Security → Accessibility, then return here.")
@@ -420,6 +487,7 @@ final class AppModel: ObservableObject {
 
     func requestInputMonitoring() {
         _ = AulaPermissions.requestInputMonitoring()
+        pollGeneration += 1
         inputMonitoringGranted = AulaPermissions.inputMonitoring
         AulaPermissions.openInputMonitoringSettings()
         showToast(.info, "Enable AULA Control under Privacy & Security → Input Monitoring, then relaunch.")
@@ -440,12 +508,14 @@ final class AppModel: ObservableObject {
     func setLaunchAtLogin(_ enabled: Bool) {
         do {
             try LaunchAtLogin.set(enabled)
+            pollGeneration += 1
             launchAtLogin = LaunchAtLogin.isEnabled
             if LaunchAtLogin.requiresApproval {
                 LaunchAtLogin.openSettings()
                 showToast(.info, "Allow AULA Control in System Settings → General → Login Items.")
             }
         } catch {
+            pollGeneration += 1
             launchAtLogin = LaunchAtLogin.isEnabled
             showToast(.error, "Could not update login item: \(error.localizedDescription)")
         }
