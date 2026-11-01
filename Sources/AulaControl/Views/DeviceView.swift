@@ -108,7 +108,7 @@ struct DeviceView: View {
 
                 GroupLabel("Power and response")
 
-                FormRow(title: "Sleep after inactivity", detail: "Turns the radio off when idle") {
+                DeviceFormRow(title: "Sleep after inactivity", detail: "Turns the radio off when idle") {
                     SleepSelector(value: Binding(
                         get: { model.state.options.sleep },
                         set: { model.state.options.sleep = $0 }
@@ -135,7 +135,7 @@ struct DeviceView: View {
                 .padding(.horizontal, 18)
                 .padding(.vertical, 11)
                 Hairline().padding(.leading, 18)
-                FormRow(title: "Fn tap toggle", detail: "Tap to latch the layer instead of holding", keys: ["Fn"]) {
+                DeviceFormRow(title: "Fn tap toggle", detail: "Tap to latch the layer instead of holding", keys: ["Fn"]) {
                     SwitchControl(
                         label: "Fn tap toggle",
                         isOn: Binding(
@@ -147,7 +147,7 @@ struct DeviceView: View {
 
                 GroupLabel("Key locks")
 
-                FormRow(title: "Lock Windows key", detail: "Prevents accidental Start menu presses", keys: ["Win"]) {
+                DeviceFormRow(title: "Lock Windows key", detail: "Prevents accidental Start menu presses", keys: ["Win"]) {
                     SwitchControl(
                         label: "Lock Windows key",
                         isOn: Binding(
@@ -157,7 +157,7 @@ struct DeviceView: View {
                     )
                 }
                 Hairline().padding(.leading, 18)
-                FormRow(title: "Lock Alt + Tab", detail: "Disables the task switcher chord", keys: ["Alt", "Tab"]) {
+                DeviceFormRow(title: "Lock Alt + Tab", detail: "Disables the task switcher chord", keys: ["Alt", "Tab"]) {
                     SwitchControl(
                         label: "Lock Alt + Tab",
                         isOn: Binding(
@@ -167,7 +167,7 @@ struct DeviceView: View {
                     )
                 }
                 Hairline().padding(.leading, 18)
-                FormRow(title: "Lock Alt + F4", detail: "Disables the close window chord", keys: ["Alt", "F4"]) {
+                DeviceFormRow(title: "Lock Alt + F4", detail: "Disables the close window chord", keys: ["Alt", "F4"]) {
                     SwitchControl(
                         label: "Lock Alt + F4",
                         isOn: Binding(
@@ -411,12 +411,6 @@ struct DeviceView: View {
 
 // MARK: - Form pieces
 
-fileprivate struct Hairline: View {
-    var body: some View {
-        Rectangle().fill(Theme.stroke).frame(height: 1)
-    }
-}
-
 /// Small group heading between hairline-separated form rows.
 fileprivate struct GroupLabel: View {
     let text: String
@@ -437,7 +431,7 @@ fileprivate struct GroupLabel: View {
 }
 
 /// A settings row: title and detail on the left, optional key legend, control on the right.
-fileprivate struct FormRow<Control: View>: View {
+fileprivate struct DeviceFormRow<Control: View>: View {
     let title: String
     let detail: String
     var keys: [String] = []

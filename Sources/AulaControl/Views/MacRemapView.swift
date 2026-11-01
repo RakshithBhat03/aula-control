@@ -366,19 +366,6 @@ struct MacRemapView: View {
 
 /// One-pixel separator used between rows and columns inside a single panel, so the page keeps one
 /// level of cards.
-private struct Hairline: View {
-    var axis: Axis = .horizontal
-
-    var body: some View {
-        switch axis {
-        case .horizontal:
-            Rectangle().fill(Theme.stroke).frame(height: 1).frame(maxWidth: .infinity)
-        case .vertical:
-            Rectangle().fill(Theme.stroke).frame(width: 1).frame(maxHeight: .infinity)
-        }
-    }
-}
-
 /// Flat inline note: a thin status bar on the leading edge over the field surface. Used for
 /// warnings and errors that belong to a panel rather than the whole page.
 private struct InlineNote: View {

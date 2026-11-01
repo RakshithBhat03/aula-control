@@ -263,12 +263,6 @@ private struct FormCell<Content: View>: View {
     }
 }
 
-private struct Hairline: View {
-    var body: some View {
-        Rectangle().fill(Theme.stroke).frame(height: 1)
-    }
-}
-
 /// Label on the left, read-only value on the right, like a spec sheet line.
 private struct SpecRow<Value: View>: View {
     let label: String

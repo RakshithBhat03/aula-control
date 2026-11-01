@@ -555,12 +555,6 @@ struct MacrosView: View {
 
 // MARK: - Building blocks
 
-private struct Hairline: View {
-    var body: some View {
-        Rectangle().fill(Theme.stroke).frame(height: 1)
-    }
-}
-
 private struct VerticalHairline: View {
     var body: some View {
         Rectangle().fill(Theme.stroke).frame(width: 1)
