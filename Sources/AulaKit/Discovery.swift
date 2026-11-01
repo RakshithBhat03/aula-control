@@ -170,6 +170,14 @@ public enum AulaDiscovery {
         return .absent
     }
 
+    /// The 2.4 GHz dongle's vendor interface (usage page 0xFF60), used only for the battery query.
+    public static func dongleVendorDevice() -> IOHIDDevice? {
+        devices(vendor: F108.wirelessVendorID, product: F108.wirelessProductID)
+            .filter { (string($0, kIOHIDProductKey) ?? "").lowercased().contains("f108") }
+            .filter { (string($0, kIOHIDTransportKey) ?? "").uppercased() == "USB" }
+            .first { hasUsagePage($0, AulaBattery.dongleUsagePage) }
+    }
+
     public static func wiredConfigDevice() -> IOHIDDevice? {
         let wired = devices(vendor: F108.vendorID, product: F108.productID)
         return wired.first { hasUsagePage($0, F108.configUsagePage) }

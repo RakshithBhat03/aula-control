@@ -207,6 +207,8 @@ struct ConnectionCard: View {
                     Text("Preview")
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(Theme.blue)
+                } else if let level = model.batteryPercent {
+                    BatteryIndicator(level: level)
                 }
             }
             HStack(spacing: 5) {

@@ -238,3 +238,26 @@ final class ProtocolEncodingTests: XCTestCase {
         }
     }
 }
+
+final class BatteryTests: XCTestCase {
+    func testDongleQueryMatchesTheDocumentedReport() {
+        let query = AulaBattery.dongleQuery()
+        XCTAssertEqual(query.count, 32)
+        XCTAssertEqual(Array(query.prefix(3)), [0x20, 0x01, 0x00])
+        XCTAssertEqual(query[31], 0x21) // low byte of 0x20 + 0x01
+        XCTAssertTrue(query[3..<31].allSatisfy { $0 == 0 })
+    }
+
+    func testParsesBatteryReplies() {
+        var reply = [UInt8](repeating: 0, count: 32)
+        reply[0] = 0x20; reply[1] = 0x01; reply[3] = 87
+        XCTAssertEqual(AulaBattery.level(fromDongleReply: reply), 87)
+        XCTAssertEqual(AulaBattery.level(fromDongleReply: [0] + reply), 87) // with a report ID
+        reply[3] = 0
+        XCTAssertNil(AulaBattery.level(fromDongleReply: reply)) // asleep or away
+        reply[3] = 140
+        XCTAssertEqual(AulaBattery.level(fromDongleReply: reply), 100)
+        reply[0] = 0x21
+        XCTAssertNil(AulaBattery.level(fromDongleReply: reply)) // another command's reply
+    }
+}

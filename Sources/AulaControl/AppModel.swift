@@ -135,6 +135,7 @@ final class AppModel: ObservableObject {
                     productID: F108.productID
                 )
                 showToast(.info, "Preview mode: changes are simulated, not sent to the keyboard.")
+                updateBatteryMonitoring()
             } else {
                 refreshConnection(force: true)
             }
@@ -148,6 +149,9 @@ final class AppModel: ObservableObject {
     @Published var lastKeySource: String?
     @Published var karabinerPresent = false
     @Published var launchAtLogin = LaunchAtLogin.isEnabled
+    /// Keyboard battery level, when the current link reports one (Bluetooth or the 2.4 GHz dongle).
+    /// USB-C has no battery report, so this stays nil while wired.
+    @Published var batteryPercent: Int?
 
     let store: AulaStore
     private let remapper = KeyboardRemapper()
@@ -157,6 +161,9 @@ final class AppModel: ObservableObject {
     /// overwriting newer values (e.g. snapping the Launch at login toggle back off).
     private var pollGeneration = 0
     private let pollQueue = DispatchQueue(label: "com.aulacontrol.poll", qos: .utility)
+    private let bluetoothBattery = BluetoothBatteryMonitor()
+    private var dongleBatteryTimer: Timer?
+    private let batteryQueue = DispatchQueue(label: "com.aulacontrol.battery", qos: .utility)
     private var saveWork: DispatchWorkItem?
     private var toastWork: DispatchWorkItem?
 
@@ -253,6 +260,7 @@ final class AppModel: ObservableObject {
         if force || new.kind != connection.kind || new.product != connection.product || new.uniqueID != connection.uniqueID {
             let wasWired = connection.kind == .wired
             connection = new
+            updateBatteryMonitoring()
             if new.kind != .wired {
                 closeDevice()
             }
@@ -283,6 +291,48 @@ final class AppModel: ObservableObject {
         if state.macRemap.enabled && !remapRunning && accessibilityGranted {
             startRemapperIfPossible()
         }
+    }
+
+    // MARK: - Battery
+
+    /// Starts the battery reader that matches the link: Bluetooth reads the GATT Battery Service,
+    /// the dongle answers a read-only vendor query every 30 s, and USB-C has no battery report.
+    private func updateBatteryMonitoring() {
+        let kind = demoMode ? AulaConnectionKind.absent : connection.kind
+        if kind != .bluetooth { bluetoothBattery.stop() }
+        if kind != .dongle {
+            dongleBatteryTimer?.invalidate()
+            dongleBatteryTimer = nil
+        }
+        switch kind {
+        case .bluetooth:
+            bluetoothBattery.onChange = { [weak self] level in
+                DispatchQueue.main.async { self?.setBattery(level) }
+            }
+            bluetoothBattery.start()
+        case .dongle:
+            guard dongleBatteryTimer == nil else { return }
+            readDongleBattery()
+            dongleBatteryTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+                Task { @MainActor in self?.readDongleBattery() }
+            }
+        case .wired, .absent:
+            setBattery(nil)
+        }
+    }
+
+    private func readDongleBattery() {
+        batteryQueue.async { [weak self] in
+            let level = AulaBattery.readFromDongle()
+            DispatchQueue.main.async {
+                guard let self, self.connection.kind == .dongle else { return }
+                self.setBattery(level)
+            }
+        }
+    }
+
+    private func setBattery(_ level: Int?) {
+        if batteryPercent != level { batteryPercent = level }
     }
 
     // MARK: - Device operations
