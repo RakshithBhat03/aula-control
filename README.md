@@ -28,7 +28,7 @@ Universal binary (Apple silicon and Intel), macOS 13 or newer.
 | ![Lighting](docs/screenshots/lighting.png) | ![Per-key RGB](docs/screenshots/per-key.png) |
 | **Lighting** — the 20 firmware effects | **Per-key RGB** — paint all 104 keys |
 | ![Keymap](docs/screenshots/keymap.png) | ![Mac remap](docs/screenshots/mac-remap.png) |
-| **Keymap** — onboard remaps, normal and FN layers | **Mac remap** — remapping that works over Bluetooth |
+| **Keymap** — onboard remaps, normal and Fn layers | **Mac remap** — remapping that works over Bluetooth |
 
 ## What works
 
@@ -36,9 +36,9 @@ Universal binary (Apple silicon and Intel), macOS 13 or newer.
 |---|:---:|:---:|
 | 20 lighting effects with color, brightness, speed and direction | ✓ | |
 | Per-key RGB for all 104 keys | ✓ | |
-| Onboard remapping, normal and FN layers (keys, shortcuts, media, mouse, macros, disabled) | ✓ | |
+| Onboard remapping, normal and Fn layers (keys, shortcuts, media, mouse, macros, disabled) | ✓ | |
 | Macro recording and upload (keys, mouse, delays, repeat modes) | ✓ | |
-| Sleep timer, key response, FN tap-toggle, Win / Alt+Tab / Alt+F4 locks | ✓ | |
+| Sleep timer, key response, Fn tap toggle, Win / Alt+Tab / Alt+F4 locks | ✓ | |
 | LCD clock sync | ✓ | |
 | macOS-level remapping, scoped to the AULA keyboard | ✓ | ✓ |
 | Macro playback on this Mac | ✓ | ✓ |
@@ -60,7 +60,7 @@ The keyboard can't report its current settings back, so the app keeps your confi
 
 ### macOS remapping
 
-**Mac remap** rewrites keys at the macOS event layer, so it works over Bluetooth and never touches the keyboard's firmware. It supports single keys, shortcuts, modifier swaps, media keys, disabled keys and macro playback, plus presets for a Mac modifier layout, Caps Lock → Control, and WASD → arrows. By default it only affects the AULA keyboard; your MacBook's built-in keyboard is left alone.
+**Mac remap** rewrites keys at the macOS event layer, so it works over Bluetooth and never touches the keyboard's firmware. It supports single keys, shortcuts, modifier swaps, media keys, disabled keys and macro playback, plus presets for a Mac modifier layout and Caps Lock → Control. By default it only affects the AULA keyboard; your MacBook's built-in keyboard is left alone.
 
 If Karabiner-Elements grabs the AULA, macOS sees Karabiner's virtual keyboard instead. Either turn off *Modify events* for the AULA in Karabiner → Devices, or switch off **Only the AULA keyboard** in AULA Control. The Mac remap page detects this and shows the last key source.
 
@@ -74,19 +74,19 @@ aula light breath --color 00C8FF --speed 3       # lighting effect
 aula perkey --all 101418 --key esc=FF3020        # per-key RGB
 aula remap --preset mac                          # onboard keymap preset
 aula remap --set capslock=ctrl --set lalt=cmd    # individual remaps
-aula remap --fn --set f1=media:play              # FN layer
+aula remap --fn --set f1=media:play              # Fn layer
 aula macro --text "Hello"                        # typing macro (replaces the macro bank)
 aula options --sleep 5 --response 3 --lock-win   # device options
 aula clock                                       # sync the LCD clock
 aula push                                        # push the app's saved configuration
 ```
 
-Every command accepts `--dry-run`, which prints the exact 64-byte HID reports without opening the keyboard. `aula --help` lists all options.
+Commands that write to the keyboard accept `--dry-run`, which prints the HID reports they would send (first 20 bytes of each) without opening the keyboard. `aula --help` lists all options.
 
 ## Limitations
 
 - **Bluetooth has no configuration protocol.** Lighting, per-key RGB, onboard remaps, macros and options require USB-C. This is a firmware limitation.
-- The **light bar and side strips** are driven by a separate controller that neither this app nor AULA's software can reach. Use the FN shortcuts.
+- The **light bar and side strips** are driven by a separate controller that neither this app nor AULA's software can reach. Use the Fn shortcuts.
 - **LCD image and GIF upload is not implemented.** Exceeding the frame limit can permanently corrupt the keyboard's menu graphics.
 - **Macro slots are positional.** Deleting a macro shifts later slots, so check key bindings afterwards.
 - **Secure Input** (password fields and some apps) blocks event taps by design; macOS remaps pause there.
@@ -100,7 +100,7 @@ Every command accepts `--dry-run`, which prints the exact 64-byte HID reports wi
 
 ## Build from source
 
-Requires Xcode 15 or newer.
+Requires Xcode 15.3 or newer.
 
 ```bash
 ./scripts/build-app.sh          # dist/AULA Control.app (universal; ARCH=native for this Mac only)
