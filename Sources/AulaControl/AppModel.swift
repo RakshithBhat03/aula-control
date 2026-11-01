@@ -18,11 +18,11 @@ enum AppSection: String, CaseIterable, Identifiable {
         switch self {
         case .overview: return "Overview"
         case .lighting: return "Lighting"
-        case .perKey: return "Per-Key RGB"
+        case .perKey: return "Per-key RGB"
         case .keymap: return "Keymap"
         case .macros: return "Macros"
         case .device: return "Device"
-        case .macRemap: return "Mac Remap"
+        case .macRemap: return "Mac remap"
         case .settings: return "Settings"
         }
     }
@@ -42,9 +42,23 @@ enum AppSection: String, CaseIterable, Identifiable {
 
     var group: String {
         switch self {
-        case .overview, .lighting, .perKey, .keymap, .macros, .device: return "KEYBOARD"
-        case .macRemap: return "MACOS"
-        case .settings: return "APP"
+        case .overview, .lighting, .perKey, .keymap, .macros, .device: return "Keyboard"
+        case .macRemap: return "macOS"
+        case .settings: return "App"
+        }
+    }
+
+    /// Matches the Keyboard menu's ⌘-number shortcuts.
+    var shortcut: String {
+        switch self {
+        case .overview: return "⌘1"
+        case .lighting: return "⌘2"
+        case .perKey: return "⌘3"
+        case .keymap: return "⌘4"
+        case .macros: return "⌘5"
+        case .macRemap: return "⌘6"
+        case .device: return "⌘7"
+        case .settings: return "⌘8"
         }
     }
 }

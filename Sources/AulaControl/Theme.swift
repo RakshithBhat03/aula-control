@@ -1,27 +1,45 @@
 import SwiftUI
 import AulaKit
 
+/// Design tokens for the app. One cool graphite gray family, one amber "LED" accent used only for
+/// selection and active state, and muted semantic colors for status. No gradients, no glows.
 enum Theme {
-    static let background = Color(hex: 0x0A0B0D)
-    static let sidebar = Color(hex: 0x0E1014)
-    static let sidebarElevated = Color(hex: 0x12151A)
-    static let card = Color(hex: 0x15181D)
-    static let cardRaised = Color(hex: 0x1A1E25)
-    static let field = Color(hex: 0x101216)
-    static let stroke = Color.white.opacity(0.065)
-    static let strokeStrong = Color.white.opacity(0.12)
-    static let text = Color(hex: 0xF3F4F6)
-    static let secondary = Color(hex: 0x9AA2AE)
-    static let tertiary = Color(hex: 0x6A727E)
-    static let accent = Color(hex: 0xF5B544)
-    static let accentDeep = Color(hex: 0xD98E1F)
-    static let mint = Color(hex: 0x5BD6BE)
-    static let blue = Color(hex: 0x6AA8FF)
-    static let danger = Color(hex: 0xFF6B5E)
-    static let success = Color(hex: 0x6DDE9A)
+    // Surfaces, darkest to lightest.
+    static let sidebar = Color(hex: 0x0C0D0F)
+    static let background = Color(hex: 0x111214)
+    static let field = Color(hex: 0x0E0F11)
+    static let card = Color(hex: 0x17181B)
+    static let cardRaised = Color(hex: 0x1E1F23)
+    static let sidebarElevated = Color(hex: 0x151619)
 
-    static let radius: CGFloat = 18
-    static let radiusSmall: CGFloat = 12
+    static let stroke = Color.white.opacity(0.07)
+    static let strokeStrong = Color.white.opacity(0.13)
+
+    static let text = Color(hex: 0xECEDEF)
+    static let secondary = Color(hex: 0x9A9DA4)
+    static let tertiary = Color(hex: 0x62656C)
+
+    /// The single accent. Reads like an indicator LED on a dark case.
+    static let accent = Color(hex: 0xE8A23C)
+    static let accentDeep = Color(hex: 0xC4852A)
+    static let onAccent = Color(hex: 0x1A1206)
+
+    // Semantic status colors, kept muted so they never compete with the accent.
+    static let success = Color(hex: 0x62BE86)
+    static let danger = Color(hex: 0xE2665C)
+    static let blue = Color(hex: 0x7FA3D9)
+    /// Legacy alias; status green.
+    static let mint = success
+
+    static let radius: CGFloat = 10
+    static let radiusSmall: CGFloat = 6
+
+    // Typography scale.
+    static let titleFont = Font.system(size: 22, weight: .semibold)
+    static let sectionFont = Font.system(size: 13, weight: .semibold)
+    static let bodyFont = Font.system(size: 12.5)
+    static let captionFont = Font.system(size: 11.5)
+    static let monoFont = Font.system(size: 11.5, weight: .medium, design: .monospaced)
 }
 
 extension Color {
@@ -51,8 +69,10 @@ extension AulaRGB {
     }
 }
 
+/// A flat panel: surface fill and a hairline border. Use for top-level groups on a page only;
+/// nest rows with dividers, not more cards.
 struct Card<Content: View>: View {
-    var padding: CGFloat = 22
+    var padding: CGFloat = 18
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -69,18 +89,135 @@ struct Card<Content: View>: View {
     }
 }
 
+/// Section heading inside a panel: sentence-case title, optional detail and trailing accessory.
+struct PanelHeader<Trailing: View>: View {
+    let title: String
+    var detail: String?
+    @ViewBuilder var trailing: Trailing
+
+    init(_ title: String, detail: String? = nil, @ViewBuilder trailing: () -> Trailing = { EmptyView() }) {
+        self.title = title
+        self.detail = detail
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(Theme.sectionFont)
+                    .foregroundStyle(Theme.text)
+                if let detail {
+                    Text(detail)
+                        .font(Theme.captionFont)
+                        .foregroundStyle(Theme.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 8)
+            trailing
+        }
+    }
+}
+
+/// Small secondary label. Historically an all-caps eyebrow; now plain sentence case.
 struct Eyebrow: View {
     let text: String
     var color: Color = Theme.secondary
 
     var body: some View {
-        Text(text.uppercased())
-            .font(.system(size: 10, weight: .semibold))
-            .tracking(1.6)
+        Text(text)
+            .font(.system(size: 11, weight: .medium))
             .foregroundStyle(color)
     }
 }
 
+/// A key legend rendered as a tiny keycap, for shortcuts such as `Fn` + `4`.
+struct KeyTag: View {
+    let text: String
+
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+            .foregroundStyle(Theme.text)
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.horizontal, 6)
+            .padding(.top, 2)
+            .padding(.bottom, 3)
+            .frame(minWidth: 20)
+            .background(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(Theme.cardRaised)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .strokeBorder(Theme.strokeStrong, lineWidth: 1)
+            )
+            .overlay(alignment: .bottom) {
+                // Thin darker skirt along the bottom edge so the tag reads as a keycap.
+                Rectangle()
+                    .fill(Color.black.opacity(0.35))
+                    .frame(height: 1.5)
+                    .padding(.horizontal, 1)
+                    .padding(.bottom, 1)
+            }
+    }
+}
+
+/// A key combination, e.g. `KeyCombo(["Fn", "4"])`.
+struct KeyCombo: View {
+    let keys: [String]
+
+    init(_ keys: [String]) { self.keys = keys }
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(Array(keys.enumerated()), id: \.offset) { index, key in
+                if index > 0 {
+                    Text("+")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(Theme.tertiary)
+                }
+                KeyTag(key)
+            }
+        }
+    }
+}
+
+/// Monospaced value readout, for numbers, hex codes and identifiers.
+struct ValueChip: View {
+    let text: String
+    var color: Color = Theme.text
+
+    init(_ text: String, color: Color = Theme.text) {
+        self.text = text
+        self.color = color
+    }
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 11, weight: .medium, design: .monospaced))
+            .monospacedDigit()
+            .lineLimit(1)
+            .fixedSize()
+            .foregroundStyle(color)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2.5)
+            .background(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(Theme.field)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .strokeBorder(Theme.stroke, lineWidth: 1)
+            )
+    }
+}
+
+/// Page header: title, the transport scope tag (e.g. "USB-C"), one line of context, actions.
 struct PageHeader: View {
     let eyebrow: String
     let title: String
@@ -95,23 +232,44 @@ struct PageHeader: View {
     }
 
     var body: some View {
-        HStack(alignment: .bottom) {
-            VStack(alignment: .leading, spacing: 8) {
-                Eyebrow(text: eyebrow, color: Theme.accent.opacity(0.9))
-                Text(title)
-                    .font(.system(size: 32, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Theme.text)
-                Text(subtitle)
-                    .font(.system(size: 13.5))
-                    .foregroundStyle(Theme.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center, spacing: 16) {
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text(title)
+                            .font(Theme.titleFont)
+                            .foregroundStyle(Theme.text)
+                        if !eyebrow.isEmpty {
+                            Text(eyebrow)
+                                .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                                .foregroundStyle(Theme.secondary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                        .strokeBorder(Theme.strokeStrong, lineWidth: 1)
+                                )
+                                .alignmentGuide(.firstTextBaseline) { $0[.firstTextBaseline] + 3 }
+                        }
+                    }
+                    Text(subtitle)
+                        .font(Theme.bodyFont)
+                        .foregroundStyle(Theme.secondary)
+                        .frame(maxWidth: 620, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 20)
+                trailing
             }
-            Spacer(minLength: 20)
-            trailing
+            .padding(.bottom, 18)
+            Rectangle()
+                .fill(Theme.stroke)
+                .frame(height: 1)
         }
     }
 }
 
+/// Status indicator: an LED dot (or icon) and a label. Flat, no capsule fill.
 struct StatusPill: View {
     let text: String
     let color: Color
@@ -121,64 +279,106 @@ struct StatusPill: View {
         HStack(spacing: 6) {
             if let icon {
                 Image(systemName: icon).font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(color)
             } else {
                 Circle().fill(color).frame(width: 6, height: 6)
             }
             Text(text)
-                .font(.system(size: 11, weight: .semibold))
-                .tracking(0.2)
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundStyle(Theme.text.opacity(0.88))
         }
-        .foregroundStyle(color)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(Capsule().fill(color.opacity(0.12)))
-        .overlay(Capsule().strokeBorder(color.opacity(0.22), lineWidth: 1))
+        .padding(.horizontal, 9)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+                .fill(Theme.field)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+                .strokeBorder(Theme.stroke, lineWidth: 1)
+        )
     }
 }
 
+/// Primary action. Solid accent, no gradient.
 struct AccentButtonStyle: ButtonStyle {
     var enabled: Bool = true
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(Color(hex: 0x1A1408))
-            .padding(.horizontal, 18)
-            .padding(.vertical, 10)
+            .font(.system(size: 12.5, weight: .semibold))
+            .foregroundStyle(Theme.onAccent)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
             .background(
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .fill(LinearGradient(
-                        colors: [Theme.accent, Theme.accentDeep],
-                        startPoint: .top, endPoint: .bottom
-                    ))
+                RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+                    .fill(configuration.isPressed ? Theme.accentDeep : Theme.accent)
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
-            )
-            .opacity(enabled ? 1 : 0.42)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .opacity(enabled ? 1 : 0.4)
+            .offset(y: configuration.isPressed ? 0.5 : 0)
     }
 }
 
+/// Secondary action. Raised neutral surface with a hairline border.
 struct GhostButtonStyle: ButtonStyle {
     var danger: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 12.5, weight: .medium))
-            .foregroundStyle(danger ? Theme.danger : Theme.text)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.white.opacity(configuration.isPressed ? 0.10 : 0.055))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(Theme.stroke, lineWidth: 1)
-            )
+        GhostButtonBody(configuration: configuration, danger: danger)
+    }
+
+    private struct GhostButtonBody: View {
+        let configuration: ButtonStyle.Configuration
+        let danger: Bool
+        @Environment(\.isEnabled) private var isEnabled
+        @State private var hovering = false
+
+        var body: some View {
+            configuration.label
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(danger ? Theme.danger : Theme.text)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+                        .fill(configuration.isPressed ? Theme.card : (hovering ? Color(hex: 0x25262B) : Theme.cardRaised))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+                        .strokeBorder(Theme.strokeStrong, lineWidth: 1)
+                )
+                .opacity(isEnabled ? 1 : 0.4)
+                .offset(y: configuration.isPressed ? 0.5 : 0)
+                .onHover { hovering = $0 }
+        }
+    }
+}
+
+/// Selectable tile used for grids of modes or action kinds.
+struct SelectableTile<Label: View>: View {
+    let isSelected: Bool
+    let action: () -> Void
+    @ViewBuilder var label: Label
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            label
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 9)
+                .background(
+                    RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+                        .fill(isSelected ? Theme.accent.opacity(0.10) : (hovering ? Theme.cardRaised : Theme.field))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+                        .strokeBorder(isSelected ? Theme.accent.opacity(0.85) : Theme.stroke, lineWidth: 1)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
     }
 }
 
@@ -189,20 +389,22 @@ struct ToggleRow: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(Theme.text)
                 if let subtitle {
                     Text(subtitle)
-                        .font(.system(size: 11.5))
+                        .font(Theme.captionFont)
                         .foregroundStyle(Theme.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer()
             Toggle("", isOn: $isOn)
                 .labelsHidden()
                 .toggleStyle(.switch)
+                .controlSize(.small)
                 .tint(Theme.accent)
         }
     }
@@ -216,20 +418,16 @@ struct SliderRow: View {
     var valueLabel: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(title)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Theme.secondary)
                 Spacer()
-                Text(valueLabel ?? "\(Int(value))")
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(Theme.text)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.06)))
+                ValueChip(valueLabel ?? "\(Int(value))")
             }
             Slider(value: $value, in: range, step: step)
+                .controlSize(.small)
                 .tint(Theme.accent)
         }
     }
@@ -241,21 +439,21 @@ struct EmptyState: View {
     let message: String
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             Image(systemName: icon)
-                .font(.system(size: 26, weight: .light))
-                .foregroundStyle(Theme.accent)
+                .font(.system(size: 20, weight: .regular))
+                .foregroundStyle(Theme.tertiary)
             Text(title)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Theme.text)
             Text(message)
-                .font(.system(size: 12))
+                .font(Theme.captionFont)
                 .foregroundStyle(Theme.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 320)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
+        .padding(.vertical, 36)
     }
 }
 
@@ -290,16 +488,16 @@ struct Toast: View {
                 .foregroundStyle(Theme.text)
                 .lineLimit(2)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(Theme.cardRaised)
-                .shadow(color: .black.opacity(0.35), radius: 18, y: 8)
+                .shadow(color: .black.opacity(0.4), radius: 12, y: 6)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(color.opacity(0.3), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(Theme.strokeStrong, lineWidth: 1)
         )
     }
 }

@@ -6,6 +6,8 @@ struct LightingView: View {
 
     private var lighting: LightingConfig { model.state.lighting }
 
+    private var canSend: Bool { model.canUseHardware || model.isPreview }
+
     private var colorBinding: Binding<Color> {
         Binding(
             get: { Color(model.state.lighting.color) },
@@ -13,67 +15,124 @@ struct LightingView: View {
         )
     }
 
+    private var colorLocked: Bool { !lighting.mode.supportsColor || lighting.colorful }
+    private var colorfulLocked: Bool { !lighting.mode.supportsColor || lighting.mode.forcesRainbow }
+
+    private var colorSourceText: String {
+        if lighting.mode == .off { return "LEDs off" }
+        if lighting.mode.forcesRainbow { return "Built-in rainbow" }
+        return lighting.colorful ? "Colorful" : "Single color"
+    }
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 20) {
                 PageHeader(
-                    eyebrow: "HARDWARE · USB",
+                    eyebrow: "USB-C",
                     title: "Lighting",
-                    subtitle: "Twenty firmware effects with color, brightness, speed and direction. Settings are stored on the keyboard, so they follow it between machines."
+                    subtitle: "20 firmware effects with color, brightness, speed and direction. Stored on the keyboard, so settings follow it between machines."
                 ) {
                     HStack(spacing: 10) {
                         StatusPill(
-                            text: model.canUseHardware || model.isPreview ? "Ready to send" : "USB-C required",
-                            color: model.canUseHardware || model.isPreview ? Theme.success : Theme.accent,
-                            icon: model.canUseHardware || model.isPreview ? "checkmark" : "cable.connector"
+                            text: canSend ? "Ready to send" : "USB-C required",
+                            color: canSend ? Theme.success : Theme.secondary,
+                            icon: canSend ? nil : "cable.connector"
                         )
                         Button {
                             model.applyLighting()
                         } label: {
                             Label("Apply lighting", systemImage: "arrow.down.to.line")
                         }
-                        .buttonStyle(AccentButtonStyle(enabled: model.canUseHardware || model.isPreview))
-                        .disabled(model.isBusy || !(model.canUseHardware || model.isPreview))
+                        .buttonStyle(AccentButtonStyle(enabled: canSend))
+                        .disabled(model.isBusy || !canSend)
                     }
                 }
 
-                HStack(alignment: .top, spacing: 18) {
+                boardPreview
+
+                HStack(alignment: .top, spacing: 16) {
                     effectsPanel
-                    controlsPanel
-                        .frame(width: 340)
+                    inspector
+                        .frame(width: 320)
                 }
 
                 firmwareZones
             }
-            .padding(.horizontal, 30)
-            .padding(.top, 30)
-            .padding(.bottom, 34)
+            .padding(.horizontal, 32)
+            .padding(.top, 28)
+            .padding(.bottom, 32)
         }
         .scrollIndicators(.hidden)
     }
 
+    // MARK: Preview
+
+    private var boardPreview: some View {
+        Card(padding: 0) {
+            VStack(spacing: 0) {
+                KeyboardView(colorFor: previewColor, isInteractive: false)
+                    .padding(14)
+                    .accessibilityLabel("Lighting preview")
+                Rectangle().fill(Theme.stroke).frame(height: 1)
+                HStack(spacing: 0) {
+                    ReadoutCell(label: "Effect", value: lighting.mode.name, mono: false)
+                    ReadoutDivider()
+                    ReadoutCell(label: "Mode", value: String(format: "0x%02X", lighting.mode.rawValue))
+                    ReadoutDivider()
+                    ReadoutCell(
+                        label: "Color",
+                        value: lighting.mode == .off || colorLocked ? colorSourceText : "#\(lighting.color.hex)",
+                        mono: !(lighting.mode == .off || colorLocked)
+                    )
+                    ReadoutDivider()
+                    ReadoutCell(label: "Brightness", value: "\(lighting.brightness)/5")
+                    ReadoutDivider()
+                    ReadoutCell(label: "Speed", value: lighting.mode.supportsSpeed ? "\(lighting.speed)/5" : "–")
+                    ReadoutDivider()
+                    ReadoutCell(
+                        label: "Direction",
+                        value: lighting.mode.supportsDirection ? (lighting.direction == 0 ? "Forward" : "Reverse") : "–",
+                        mono: false
+                    )
+                }
+                .frame(height: 48)
+            }
+        }
+    }
+
+    /// Static approximation of the effect: the board shows the colors and brightness the keyboard
+    /// will use, not the animation itself.
+    private func previewColor(_ key: KeyCap) -> AulaRGB? {
+        guard lighting.mode != .off else { return nil }
+        let level = Double(lighting.brightness) / 5
+        guard level > 0 else { return nil }
+        if lighting.mode.forcesRainbow || lighting.colorful {
+            let span = KeyLayout.f108Pro.widthUnits
+            return AulaRGB.hue((key.x + key.width / 2) / span, saturation: 0.8, value: 0.35 + 0.65 * level)
+        }
+        let c = lighting.color
+        let scale = 0.35 + 0.65 * level
+        return AulaRGB(
+            UInt8(Double(c.r) * scale),
+            UInt8(Double(c.g) * scale),
+            UInt8(Double(c.b) * scale)
+        )
+    }
+
+    // MARK: Effects
+
     private var effectsPanel: some View {
-        Card(padding: 20) {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Effects")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(Theme.text)
-                        Text("Pick a firmware mode")
-                            .font(.system(size: 11))
-                            .foregroundStyle(Theme.secondary)
-                    }
-                    Spacer()
-                    Text("\(LightingMode.allCases.count) MODES")
-                        .font(.system(size: 9, weight: .semibold))
-                        .tracking(1.1)
+        Card(padding: 16) {
+            VStack(alignment: .leading, spacing: 12) {
+                PanelHeader("Effect") {
+                    Text("\(LightingMode.allCases.count) modes")
+                        .font(Theme.monoFont)
                         .foregroundStyle(Theme.tertiary)
                 }
 
                 LazyVGrid(
-                    columns: [GridItem(.adaptive(minimum: 118), spacing: 10)],
-                    spacing: 10
+                    columns: [GridItem(.adaptive(minimum: 124), spacing: 6)],
+                    spacing: 6
                 ) {
                     ForEach(LightingMode.allCases) { mode in
                         effectTile(mode)
@@ -85,129 +144,133 @@ struct LightingView: View {
 
     private func effectTile(_ mode: LightingMode) -> some View {
         let selected = lighting.mode == mode
-        return Button {
+        return SelectableTile(isSelected: selected) {
             model.setLightingMode(mode)
         } label: {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Image(systemName: mode.symbol)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(selected ? Theme.accent : Theme.secondary)
-                    Spacer()
-                    if selected {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(Theme.accent)
-                    }
-                }
+            HStack(spacing: 8) {
+                Image(systemName: mode.symbol)
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(selected ? Theme.text : Theme.secondary)
+                    .frame(width: 16)
                 Text(mode.name)
-                    .font(.system(size: 11.5, weight: selected ? .semibold : .medium))
+                    .font(.system(size: 12, weight: selected ? .semibold : .regular))
                     .foregroundStyle(selected ? Theme.text : Theme.secondary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(0.85)
+                Spacer(minLength: 4)
+                Text(String(format: "%02d", mode.rawValue))
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(selected ? Theme.accent : Theme.tertiary)
             }
-            .padding(11)
-            .frame(maxWidth: .infinity, minHeight: 68, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .fill(selected ? Theme.accent.opacity(0.09) : Color.white.opacity(0.028))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .strokeBorder(selected ? Theme.accent.opacity(0.55) : Theme.stroke, lineWidth: 1)
-            )
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .accessibilityLabel(mode.name)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
-    private var controlsPanel: some View {
-        Card(padding: 20) {
-            VStack(alignment: .leading, spacing: 18) {
-                preview
+    // MARK: Inspector
 
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Effect settings")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Theme.text)
+    private var inspector: some View {
+        Card(padding: 16) {
+            VStack(alignment: .leading, spacing: 0) {
+                PanelHeader(lighting.mode.name, detail: colorSourceText) {
+                    Image(systemName: lighting.mode.symbol)
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(Theme.tertiary)
+                }
+                .padding(.bottom, 14)
 
-                    HStack {
-                        Text("Color")
+                hairline
+
+                HStack(spacing: 8) {
+                    Text("Color")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Theme.secondary)
+                    Spacer()
+                    ValueChip("#\(lighting.color.hex)", color: colorLocked ? Theme.tertiary : Theme.text)
+                    ColorPicker("", selection: colorBinding, supportsOpacity: false)
+                        .labelsHidden()
+                        .frame(width: 30)
+                        .disabled(colorLocked)
+                        .opacity(colorLocked ? 0.35 : 1)
+                        .accessibilityLabel("Effect color")
+                }
+                .padding(.vertical, 12)
+
+                hairline
+
+                ToggleRow(
+                    title: "Colorful",
+                    subtitle: "Rainbow instead of a single color",
+                    isOn: Binding(
+                        get: { model.state.lighting.colorful },
+                        set: { model.state.lighting.colorful = $0 }
+                    )
+                )
+                .disabled(colorfulLocked)
+                .opacity(colorfulLocked ? 0.4 : 1)
+                .padding(.vertical, 12)
+
+                hairline
+
+                SliderRow(
+                    title: "Brightness",
+                    value: Binding(
+                        get: { Double(model.state.lighting.brightness) },
+                        set: { model.state.lighting.brightness = UInt8($0) }
+                    ),
+                    range: 0...5, step: 1,
+                    valueLabel: "\(lighting.brightness)"
+                )
+                .padding(.vertical, 12)
+
+                if lighting.mode.supportsSpeed {
+                    hairline
+                    SliderRow(
+                        title: "Speed",
+                        value: Binding(
+                            get: { Double(model.state.lighting.speed) },
+                            set: { model.state.lighting.speed = UInt8($0) }
+                        ),
+                        range: 0...5, step: 1,
+                        valueLabel: "\(lighting.speed)"
+                    )
+                    .padding(.vertical, 12)
+                }
+
+                if lighting.mode.supportsDirection {
+                    hairline
+                    HStack(spacing: 12) {
+                        Text("Direction")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(Theme.secondary)
                         Spacer()
-                        Text("#\(lighting.color.hex)")
-                            .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-                            .foregroundStyle(Theme.tertiary)
-                        ColorPicker("", selection: colorBinding, supportsOpacity: false)
-                            .labelsHidden()
-                            .frame(width: 30)
-                            .disabled(!lighting.mode.supportsColor || lighting.colorful)
-                            .opacity(!lighting.mode.supportsColor || lighting.colorful ? 0.35 : 1)
-                    }
-
-                    ToggleRow(
-                        title: "Colorful",
-                        subtitle: "Rainbow instead of a single color",
-                        isOn: Binding(
-                            get: { model.state.lighting.colorful },
-                            set: { model.state.lighting.colorful = $0 }
-                        )
-                    )
-                    .disabled(!lighting.mode.supportsColor || lighting.mode.forcesRainbow)
-                    .opacity(!lighting.mode.supportsColor || lighting.mode.forcesRainbow ? 0.4 : 1)
-
-                    SliderRow(
-                        title: "Brightness",
-                        value: Binding(
-                            get: { Double(model.state.lighting.brightness) },
-                            set: { model.state.lighting.brightness = UInt8($0) }
-                        ),
-                        range: 0...5, step: 1,
-                        valueLabel: "\(lighting.brightness)"
-                    )
-
-                    if lighting.mode.supportsSpeed {
-                        SliderRow(
-                            title: "Speed",
-                            value: Binding(
-                                get: { Double(model.state.lighting.speed) },
-                                set: { model.state.lighting.speed = UInt8($0) }
-                            ),
-                            range: 0...5, step: 1,
-                            valueLabel: "\(lighting.speed)"
-                        )
-                    }
-
-                    if lighting.mode.supportsDirection {
-                        VStack(alignment: .leading, spacing: 7) {
-                            Text("Direction")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(Theme.secondary)
-                            Picker("", selection: Binding(
-                                get: { model.state.lighting.direction },
-                                set: { model.state.lighting.direction = $0 }
-                            )) {
-                                Text("Forward").tag(UInt8(0))
-                                Text("Reverse").tag(UInt8(1))
-                            }
-                            .pickerStyle(.segmented)
-                            .labelsHidden()
+                        Picker("", selection: Binding(
+                            get: { model.state.lighting.direction },
+                            set: { model.state.lighting.direction = $0 }
+                        )) {
+                            Text("Forward").tag(UInt8(0))
+                            Text("Reverse").tag(UInt8(1))
                         }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .controlSize(.small)
+                        .frame(width: 160)
+                        .accessibilityLabel("Direction")
                     }
+                    .padding(.vertical, 12)
                 }
 
-                Rectangle().fill(Theme.stroke).frame(height: 1)
+                hairline
 
-                HStack(spacing: 10) {
+                HStack(spacing: 8) {
                     Button {
                         model.applyLighting()
                     } label: {
-                        Label("Apply", systemImage: "checkmark")
+                        Label("Apply lighting", systemImage: "arrow.down.to.line")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(AccentButtonStyle(enabled: model.canUseHardware || model.isPreview))
-                    .disabled(model.isBusy || !(model.canUseHardware || model.isPreview))
+                    .buttonStyle(AccentButtonStyle(enabled: canSend))
+                    .disabled(model.isBusy || !canSend)
 
                     Button {
                         model.state.lighting = .default
@@ -217,115 +280,118 @@ struct LightingView: View {
                     }
                     .buttonStyle(GhostButtonStyle())
                     .help("Reset to defaults")
+                    .accessibilityLabel("Reset to defaults")
                 }
+                .padding(.top, 14)
 
-                if !model.canUseHardware && !model.isPreview {
+                if !canSend {
                     Label("Connect USB-C to apply", systemImage: "cable.connector")
-                        .font(.system(size: 10.5, weight: .medium))
-                        .foregroundStyle(Theme.accent.opacity(0.9))
+                        .font(Theme.captionFont)
+                        .foregroundStyle(Theme.secondary)
+                        .padding(.top, 10)
                 }
             }
         }
     }
 
-    private var preview: some View {
-        ZStack(alignment: .bottomLeading) {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(previewGradient)
-                .frame(height: 132)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
-                )
-                .overlay(
-                    LinearGradient(colors: [.clear, .black.opacity(0.5)], startPoint: .center, endPoint: .bottom)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                )
-                .overlay(alignment: .topTrailing) {
-                    Image(systemName: lighting.mode.symbol)
-                        .font(.system(size: 30, weight: .light))
-                        .foregroundStyle(.white.opacity(0.75))
-                        .padding(16)
-                }
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(lighting.mode.name)
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
-                Text(lighting.mode.forcesRainbow ? "Built-in rainbow" : (lighting.colorful ? "Colorful" : "Single color"))
-                    .font(.system(size: 10.5, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.7))
-            }
-            .padding(14)
-        }
+    private var hairline: some View {
+        Rectangle().fill(Theme.stroke).frame(height: 1)
     }
 
-    private var previewGradient: LinearGradient {
-        if lighting.mode == .off {
-            return LinearGradient(colors: [Color(hex: 0x15181D), Color(hex: 0x0D0F13)], startPoint: .topLeading, endPoint: .bottomTrailing)
-        }
-        if lighting.mode.forcesRainbow || lighting.colorful {
-            return LinearGradient(
-                colors: [
-                    Color(hex: 0xFF4D4D), Color(hex: 0xFFB020), Color(hex: 0x6DDE9A),
-                    Color(hex: 0x4ED6C0), Color(hex: 0x6AA8FF), Color(hex: 0xB678FF)
-                ],
-                startPoint: .topLeading, endPoint: .bottomTrailing
-            )
-        }
-        return LinearGradient(
-            colors: [
-                Color(lighting.color).opacity(0.95),
-                Color(lighting.color).opacity(0.5),
-                Color(hex: 0x15181D)
-            ],
-            startPoint: .topLeading, endPoint: .bottomTrailing
-        )
-    }
+    // MARK: Firmware-only zones
 
     private var firmwareZones: some View {
-        Card {
-            HStack(alignment: .top, spacing: 24) {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 7) {
-                        Image(systemName: "light.beacon.max")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(Theme.accent)
-                        Text("Light bar & side strips")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Theme.text)
+        Card(padding: 16) {
+            VStack(alignment: .leading, spacing: 12) {
+                PanelHeader(
+                    "Light bar and side strips",
+                    detail: "Driven by a separate controller that neither this app nor the vendor app can write. Use the firmware shortcuts."
+                )
+
+                Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
+                    GridRow {
+                        tableHeading("Function")
+                        tableHeading("Light bar")
+                        tableHeading("Side strip")
                     }
-                    Text("These two zones live on a separate controller. The vendor app cannot change them, and neither can this one — use the firmware shortcuts.")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Theme.secondary)
-                        .frame(maxWidth: 450, alignment: .leading)
+                    shortcutRow("Effect", lightBar: ["Fn", "L-Shift"], sideStrip: ["Fn", "R-Shift"])
+                    shortcutRow("Brightness", lightBar: ["Fn", "L-Alt"], sideStrip: ["Fn", "R-Alt"])
+                    shortcutRow("Speed", lightBar: ["Fn", "L-Ctrl"], sideStrip: nil)
+                    shortcutRow("Color", lightBar: nil, sideStrip: ["Fn", "/"])
                 }
-                Spacer(minLength: 10)
-                VStack(alignment: .leading, spacing: 7) {
-                    shortcut("Fn + L-Shift", "Light bar effect")
-                    shortcut("Fn + L-Alt", "Light bar brightness")
-                    shortcut("Fn + L-Ctrl", "Light bar speed")
-                }
-                VStack(alignment: .leading, spacing: 7) {
-                    shortcut("Fn + R-Shift", "Side strip effect")
-                    shortcut("Fn + R-Alt", "Side strip brightness")
-                    shortcut("Fn + /", "Side strip color")
-                }
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+                        .strokeBorder(Theme.stroke, lineWidth: 1)
+                )
             }
         }
     }
 
-    private func shortcut(_ keys: String, _ label: String) -> some View {
-        HStack(spacing: 8) {
-            Text(keys)
-                .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+    private func tableHeading(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(Theme.tertiary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(Theme.field)
+    }
+
+    @ViewBuilder
+    private func shortcutRow(_ function: String, lightBar: [String]?, sideStrip: [String]?) -> some View {
+        Rectangle().fill(Theme.stroke).frame(height: 1).gridCellUnsizedAxes(.horizontal)
+        GridRow {
+            Text(function)
+                .font(.system(size: 12))
                 .foregroundStyle(Theme.text)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2.5)
-                .background(RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.06)))
-            Text(label)
-                .font(.system(size: 10.5))
-                .foregroundStyle(Theme.secondary)
+                .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+                .padding(.horizontal, 12)
+            comboCell(lightBar)
+            comboCell(sideStrip)
         }
+    }
+
+    @ViewBuilder
+    private func comboCell(_ keys: [String]?) -> some View {
+        Group {
+            if let keys {
+                KeyCombo(keys)
+            } else {
+                Text("–")
+                    .font(Theme.monoFont)
+                    .foregroundStyle(Theme.tertiary)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+        .padding(.horizontal, 12)
+    }
+}
+
+/// One column of the readout strip under the board: small label above a value.
+private struct ReadoutCell: View {
+    let label: String
+    let value: String
+    var mono: Bool = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label)
+                .font(.system(size: 10.5, weight: .medium))
+                .foregroundStyle(Theme.tertiary)
+            Text(value)
+                .font(mono ? Theme.monoFont : .system(size: 12, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(Theme.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 14)
+    }
+}
+
+private struct ReadoutDivider: View {
+    var body: some View {
+        Rectangle().fill(Theme.stroke).frame(width: 1)
     }
 }

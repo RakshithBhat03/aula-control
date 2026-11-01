@@ -350,7 +350,8 @@ func remapCommand(_ args: [String]) {
 }
 
 func macroCommand(_ args: [String]) {
-    let text = value("text", in: args) ?? "Hello from AULA Control"
+    // No default text: uploading replaces the keyboard's whole macro bank, so it must be explicit.
+    guard let text = value("text", in: args) else { fail("macro needs --text \"...\" (this replaces every macro on the keyboard)") }
     let name = value("name", in: args) ?? "CLI macro"
     let macro = Macro.typing(text, name: name)
     let dryRun = flag("dry-run", in: args)
@@ -439,6 +440,10 @@ func stateCommand() {
 
 guard let command = arguments.first else { usage() }
 let rest = Array(arguments.dropFirst())
+
+// Most commands write to the keyboard, so `aula <command> --help` must print usage and never fall
+// through to the command itself.
+if rest.contains("--help") || rest.contains("-h") { usage() }
 
 switch command {
 case "status": connectionStatus()

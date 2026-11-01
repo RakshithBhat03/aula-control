@@ -71,121 +71,121 @@ struct SidebarView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             brand
-                .padding(.horizontal, 20)
-                .padding(.top, 42)
-                .padding(.bottom, 26)
+                .padding(.horizontal, 16)
+                .padding(.top, 44)
+                .padding(.bottom, 22)
 
-            VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 18) {
                 ForEach(grouped, id: \.0) { group, sections in
-                    VStack(alignment: .leading, spacing: 5) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(group)
-                            .font(.system(size: 9.5, weight: .semibold))
-                            .tracking(1.8)
+                            .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(Theme.tertiary)
-                            .padding(.horizontal, 10)
-                            .padding(.bottom, 3)
+                            .padding(.horizontal, 8)
+                            .padding(.bottom, 4)
                         ForEach(sections) { section in
                             sidebarButton(section)
                         }
                     }
                 }
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 10)
 
             Spacer(minLength: 20)
 
             ConnectionCard()
-                .padding(.horizontal, 14)
-                .padding(.bottom, 14)
-
-            HStack {
-                Text("v1.0.0")
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundStyle(Theme.tertiary)
-                Spacer()
-                Text("F108 PRO")
-                    .font(.system(size: 9, weight: .semibold))
-                    .tracking(1.2)
-                    .foregroundStyle(Theme.tertiary)
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 16)
+                .padding(.horizontal, 10)
+                .padding(.bottom, 12)
         }
-        .frame(width: 232)
-        .background(
-            LinearGradient(
-                colors: [Theme.sidebar, Color(hex: 0x0B0D10)],
-                startPoint: .top, endPoint: .bottom
-            )
-        )
+        .frame(width: 220)
+        .background(Theme.sidebar)
+    }
+
+    /// Read from the bundle so the sidebar matches the release; an unbundled `swift run` build has
+    /// no Info.plist and shows the model only.
+    private var subtitle: String {
+        guard let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String else {
+            return "F108 Pro"
+        }
+        return "F108 Pro · v\(version)"
     }
 
     private var brand: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(LinearGradient(
-                        colors: [Theme.accent, Theme.accentDeep],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    ))
-                Image(systemName: "keyboard.fill")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color(hex: 0x1A1408))
+        HStack(spacing: 10) {
+            // A single keycap as the mark: skirt plus inset face, legend in mono.
+            ZStack(alignment: .top) {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color(hex: 0x17181B))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .strokeBorder(Theme.strokeStrong, lineWidth: 1)
+                    )
+                RoundedRectangle(cornerRadius: 4.5, style: .continuous)
+                    .fill(Color(hex: 0x26282C))
+                    .frame(width: 22, height: 20)
+                    .overlay(
+                        Text("A")
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(Theme.accent)
+                    )
+                    .padding(.top, 2)
             }
-            .frame(width: 34, height: 34)
-            .shadow(color: Theme.accent.opacity(0.25), radius: 10, y: 4)
+            .frame(width: 28, height: 28)
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text("AULA")
-                    .font(.system(size: 15, weight: .bold))
-                    .tracking(2.6)
+            VStack(alignment: .leading, spacing: 0) {
+                Text("AULA Control")
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.text)
-                Text("CONTROL")
-                    .font(.system(size: 9, weight: .semibold))
-                    .tracking(2.2)
-                    .foregroundStyle(Theme.secondary)
+                Text(subtitle)
+                    .font(.system(size: 10.5, design: .monospaced))
+                    .foregroundStyle(Theme.tertiary)
             }
         }
     }
 
     private func sidebarButton(_ section: AppSection) -> some View {
-        let selected = model.section == section
-        return Button {
-            withAnimation(.easeOut(duration: 0.16)) { model.section = section }
-        } label: {
-            HStack(spacing: 10) {
+        SidebarRow(section: section, selected: model.section == section) {
+            model.section = section
+        }
+    }
+}
+
+private struct SidebarRow: View {
+    @EnvironmentObject var model: AppModel
+    let section: AppSection
+    let selected: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 9) {
                 Image(systemName: section.icon)
-                    .font(.system(size: 13, weight: .medium))
-                    .frame(width: 18)
+                    .font(.system(size: 12, weight: .regular))
+                    .frame(width: 16)
                     .foregroundStyle(selected ? Theme.accent : Theme.secondary)
                 Text(section.title)
-                    .font(.system(size: 12.5, weight: selected ? .semibold : .regular))
-                    .foregroundStyle(selected ? Theme.text : Theme.secondary)
-                Spacer()
+                    .font(.system(size: 12.5, weight: selected ? .medium : .regular))
+                    .foregroundStyle(selected ? Theme.text : Theme.text.opacity(0.78))
+                Spacer(minLength: 4)
                 if section == .macRemap && model.remapRunning {
                     Circle().fill(Theme.success).frame(width: 5, height: 5)
                 }
-                if section == .device && model.connection.kind == .wired {
-                    Circle().fill(Theme.accent).frame(width: 5, height: 5)
-                }
+                Text(section.shortcut)
+                    .font(.system(size: 10.5, design: .monospaced))
+                    .foregroundStyle(Theme.tertiary)
+                    .opacity(selected || hovering ? 1 : 0.6)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
             .background(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(selected ? Color.white.opacity(0.065) : .clear)
+                RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+                    .fill(selected ? Theme.cardRaised : (hovering ? Theme.sidebarElevated : .clear))
             )
-            .overlay(alignment: .leading) {
-                if selected {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Theme.accent)
-                        .frame(width: 2.5, height: 16)
-                        .offset(x: -1)
-                }
-            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onHover { hovering = $0 }
     }
 }
 
@@ -193,59 +193,56 @@ struct ConnectionCard: View {
     @EnvironmentObject var model: AppModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 7) {
                 Circle()
                     .fill(model.connectionColor)
-                    .frame(width: 7, height: 7)
-                    .shadow(color: model.connectionColor.opacity(0.8), radius: 5)
+                    .frame(width: 6, height: 6)
                 Text(model.connection.kind == .absent ? "No keyboard" : model.connection.product)
-                    .font(.system(size: 11.5, weight: .semibold))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
-                Spacer()
+                Spacer(minLength: 0)
                 if model.isPreview {
-                    Text("PREVIEW")
-                        .font(.system(size: 8, weight: .bold))
-                        .tracking(0.8)
+                    Text("Preview")
+                        .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(Theme.blue)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(Theme.blue.opacity(0.14)))
                 }
             }
             HStack(spacing: 5) {
                 Image(systemName: model.connection.kind.symbol)
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.system(size: 9.5, weight: .medium))
                 Text(model.hardwareStatusText)
-                    .font(.system(size: 10.5, weight: .medium))
-                Spacer()
-                Text(model.connection.kind.supportsHardwareConfig ? "CONFIG READY" : "READ ONLY")
-                    .font(.system(size: 8, weight: .semibold))
-                    .tracking(0.6)
+                    .font(.system(size: 11))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                Text(model.connection.kind == .absent ? "" : (model.connection.kind.supportsHardwareConfig ? "config" : "typing only"))
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(model.connection.kind.supportsHardwareConfig ? Theme.tertiary : Theme.accent)
             }
-            .foregroundStyle(model.connection.kind.supportsHardwareConfig ? Theme.secondary : Theme.accent.opacity(0.8))
+            .foregroundStyle(Theme.secondary)
 
             if model.connection.kind == .bluetooth {
                 Text("Connect USB-C for lighting, remaps and macros.")
-                    .font(.system(size: 10.5))
+                    .font(.system(size: 11))
                     .foregroundStyle(Theme.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(12)
+        .padding(10)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(Theme.sidebarElevated)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .strokeBorder(Theme.stroke, lineWidth: 1)
         )
     }
 }
 
-struct WindowConfigurator: NSViewRepresentable {    func makeNSView(context: Context) -> NSView {
+struct WindowConfigurator: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
         let view = NSView()
         DispatchQueue.main.async {
             guard let window = view.window else { return }

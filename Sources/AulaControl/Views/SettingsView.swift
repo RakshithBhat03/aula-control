@@ -4,180 +4,320 @@ import AulaKit
 struct SettingsView: View {
     @EnvironmentObject var model: AppModel
 
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+    }
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 20) {
                 PageHeader(
-                    eyebrow: "AULA CONTROL",
+                    eyebrow: "macOS",
                     title: "Settings",
                     subtitle: "Startup behavior, permissions and the local configuration file."
                 )
 
-                HStack(alignment: .top, spacing: 18) {
-                    Card {
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("App")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(Theme.text)
-
-                            ToggleRow(
-                                title: "Launch at login",
-                                subtitle: "Keep remapping active after a restart",
-                                isOn: Binding(
-                                    get: { model.launchAtLogin },
-                                    set: { model.setLaunchAtLogin($0) }
-                                )
-                            )
-
-                            ToggleRow(
-                                title: "Apply saved config on USB connect",
-                                subtitle: "Push lighting, keymap and macros when the cable appears",
-                                isOn: Binding(
-                                    get: { model.state.autoApplyOnConnect },
-                                    set: { model.state.autoApplyOnConnect = $0 }
-                                )
-                            )
-
-                            ToggleRow(
-                                title: "Preview mode",
-                                subtitle: "Explore the UI without writing to hardware",
-                                isOn: Binding(
-                                    get: { model.demoMode },
-                                    set: { model.demoMode = $0 }
-                                )
-                            )
-
-                            Text("Preview mode simulates every command. It is useful for trying layouts before you plug in the keyboard.")
-                                .font(.system(size: 10.5))
-                                .foregroundStyle(Theme.tertiary)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-
-                    Card {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text("Permissions")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(Theme.text)
-
-                            permission("Accessibility", "Remap keys and play macros", model.accessibilityGranted) {
-                                model.requestAccessibility()
-                            }
-                            permission("Input Monitoring", "Identify the keyboard's HID services", model.inputMonitoringGranted) {
-                                model.requestInputMonitoring()
-                            }
-
-                            Button {
-                                model.refreshPermissions()
-                            } label: {
-                                Label("Refresh status", systemImage: "arrow.clockwise")
-                            }
-                            .buttonStyle(GhostButtonStyle())
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
+                VStack(alignment: .leading, spacing: 16) {
+                    generalGroup
+                    permissionsGroup
+                    configurationGroup
+                    aboutGroup
                 }
-
-                Card {
-                    VStack(alignment: .leading, spacing: 13) {
-                        HStack {
-                            Text("Configuration file")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(Theme.text)
-                            Spacer()
-                            Text("JSON")
-                                .font(.system(size: 8.5, weight: .bold))
-                                .tracking(1.1)
-                                .foregroundStyle(Theme.tertiary)
-                        }
-                        Text(model.store.url.path)
-                            .font(.system(size: 10.5, design: .monospaced))
-                            .foregroundStyle(Theme.secondary)
-                            .textSelection(.enabled)
-                            .lineLimit(2)
-                        HStack(spacing: 10) {
-                            Button {
-                                model.revealStateFile()
-                            } label: {
-                                Label("Reveal in Finder", systemImage: "folder")
-                            }
-                            .buttonStyle(GhostButtonStyle())
-
-                            Text("Settings save automatically. The file is the source of truth because the keyboard protocol is write-only.")
-                                .font(.system(size: 10.5))
-                                .foregroundStyle(Theme.tertiary)
-                        }
-                    }
-                }
-
-                Card {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("About")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(Theme.text)
-                        HStack(alignment: .top, spacing: 28) {
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text("AULA Control 1.0.0")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundStyle(Theme.text)
-                                Text("A native macOS companion for the AULA F108 Pro. Not affiliated with AULA. Use at your own risk; the protocol can change with firmware updates.")
-                                    .font(.system(size: 10.5))
-                                    .foregroundStyle(Theme.secondary)
-                                    .lineSpacing(1.5)
-                            }
-                            Spacer()
-                            VStack(alignment: .leading, spacing: 6) {
-                                Eyebrow(text: "PROTOCOL SOURCES")
-                                Link("parsiya/f108-pro", destination: URL(string: "https://github.com/parsiya/f108-pro")!)
-                                Link("bacoinz/aula-studio", destination: URL(string: "https://github.com/bacoinz/aula-studio")!)
-                                Link("sarequl/aula-studio", destination: URL(string: "https://github.com/sarequl/aula-studio")!)
-                            }
-                            .font(.system(size: 10.5))
-                            .tint(Theme.accent)
-                        }
-
-                        Rectangle().fill(Theme.stroke).frame(height: 1)
-
-                        HStack(spacing: 18) {
-                            Label("USB HID 0xFF13", systemImage: "cable.connector")
-                            Label("No kernel extension", systemImage: "checkmark.shield")
-                            Label("Settings stay on-device", systemImage: "internaldrive")
-                            Spacer()
-                            Text("F108 PRO")
-                                .font(.system(size: 9, weight: .bold))
-                                .tracking(1.5)
-                                .foregroundStyle(Theme.tertiary)
-                        }
-                        .font(.system(size: 10))
-                        .foregroundStyle(Theme.tertiary)
-                    }
-                }
+                .frame(maxWidth: 720, alignment: .leading)
             }
-            .padding(.horizontal, 30)
-            .padding(.top, 30)
-            .padding(.bottom, 34)
+            .padding(.horizontal, 32)
+            .padding(.top, 28)
+            .padding(.bottom, 32)
         }
         .scrollIndicators(.hidden)
     }
 
-    private func permission(_ title: String, _ detail: String, _ granted: Bool, action: @escaping () -> Void) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: granted ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                .font(.system(size: 11))
-                .foregroundStyle(granted ? Theme.success : Theme.accent)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .font(.system(size: 11.5, weight: .medium))
-                    .foregroundStyle(Theme.text)
-                Text(detail)
-                    .font(.system(size: 10))
-                    .foregroundStyle(Theme.secondary)
+    // MARK: - Groups
+
+    private var generalGroup: some View {
+        SettingsGroup(title: "General") {
+            FormCell {
+                ToggleRow(
+                    title: "Launch at login",
+                    subtitle: "Keeps remapping active after a restart.",
+                    isOn: Binding(
+                        get: { model.launchAtLogin },
+                        set: { model.setLaunchAtLogin($0) }
+                    )
+                )
             }
-            Spacer()
-            if !granted {
-                Button("Grant") { action() }
+            Hairline()
+            FormCell {
+                ToggleRow(
+                    title: "Apply saved config on USB connect",
+                    subtitle: "Sends lighting, keymap and macros when the cable is plugged in.",
+                    isOn: Binding(
+                        get: { model.state.autoApplyOnConnect },
+                        set: { model.state.autoApplyOnConnect = $0 }
+                    )
+                )
+            }
+            Hairline()
+            FormCell {
+                ToggleRow(
+                    title: "Preview mode",
+                    subtitle: "Simulates every command without writing to the keyboard. Use it to try layouts before plugging in.",
+                    isOn: Binding(
+                        get: { model.demoMode },
+                        set: { model.demoMode = $0 }
+                    )
+                )
+            }
+        }
+    }
+
+    private var permissionsGroup: some View {
+        SettingsGroup(
+            title: "Permissions",
+            detail: "Granted in System Settings > Privacy & Security."
+        ) {
+            Button {
+                model.refreshPermissions()
+            } label: {
+                Label("Refresh", systemImage: "arrow.clockwise")
+            }
+            .buttonStyle(GhostButtonStyle())
+            .help("Re-check permission status")
+        } content: {
+            permission("Accessibility", "Remap keys and play macros.", model.accessibilityGranted) {
+                model.requestAccessibility()
+            }
+            Hairline()
+            permission("Input Monitoring", "Identify the keyboard's HID services.", model.inputMonitoringGranted) {
+                model.requestInputMonitoring()
+            }
+        }
+    }
+
+    private var configurationGroup: some View {
+        SettingsGroup(
+            title: "Configuration file",
+            detail: "Saved automatically. The keyboard protocol is write-only, so this file is the source of truth."
+        ) {
+            ValueChip("JSON", color: Theme.secondary)
+        } content: {
+            FormCell {
+                HStack(spacing: 10) {
+                    Text(model.store.url.path)
+                        .font(Theme.monoFont)
+                        .foregroundStyle(Theme.secondary)
+                        .textSelection(.enabled)
+                        .lineLimit(2)
+                        .truncationMode(.middle)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+                                .fill(Theme.field)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+                                .strokeBorder(Theme.stroke, lineWidth: 1)
+                        )
+
+                    Button {
+                        model.revealStateFile()
+                    } label: {
+                        Label("Reveal in Finder", systemImage: "folder")
+                    }
                     .buttonStyle(GhostButtonStyle())
+                }
             }
+        }
+    }
+
+    private var aboutGroup: some View {
+        SettingsGroup(
+            title: "About",
+            detail: "Not affiliated with AULA. Use at your own risk; firmware updates can change the protocol."
+        ) {
+            FormCell {
+                SpecRow(label: "Version") { ValueChip(appVersion) }
+            }
+            Hairline()
+            FormCell {
+                SpecRow(label: "Device") { ValueChip("AULA F108 Pro") }
+            }
+            Hairline()
+            FormCell {
+                SpecRow(label: "Interface") { ValueChip("USB HID 0xFF13") }
+            }
+            Hairline()
+            FormCell {
+                SpecRow(label: "Driver") {
+                    Text("None, no kernel extension")
+                        .font(Theme.captionFont)
+                        .foregroundStyle(Theme.secondary)
+                }
+            }
+            Hairline()
+            FormCell {
+                SpecRow(label: "Storage") {
+                    Text("Settings stay on this Mac")
+                        .font(Theme.captionFont)
+                        .foregroundStyle(Theme.secondary)
+                }
+            }
+            Hairline()
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Protocol sources")
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(Theme.text)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .padding(.bottom, 6)
+                SourceLink(repo: "parsiya/f108-pro")
+                SourceLink(repo: "bacoinz/aula-studio")
+                SourceLink(repo: "sarequl/aula-studio")
+            }
+            .padding(.bottom, 8)
+        }
+    }
+
+    // MARK: - Rows
+
+    private func permission(_ title: String, _ detail: String, _ granted: Bool, action: @escaping () -> Void) -> some View {
+        FormCell {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(Theme.text)
+                    Text(detail)
+                        .font(Theme.captionFont)
+                        .foregroundStyle(Theme.secondary)
+                }
+                Spacer()
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(granted ? Theme.success : Theme.danger)
+                        .frame(width: 6, height: 6)
+                    Text(granted ? "Granted" : "Not granted")
+                        .font(Theme.captionFont)
+                        .foregroundStyle(Theme.secondary)
+                }
+                .accessibilityElement(children: .combine)
+                if !granted {
+                    Button("Grant") { action() }
+                        .buttonStyle(GhostButtonStyle())
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Form primitives
+
+/// One flat panel per settings section: header strip, hairline, then rows separated by hairlines.
+private struct SettingsGroup<Trailing: View, Content: View>: View {
+    let title: String
+    var detail: String?
+    @ViewBuilder var trailing: Trailing
+    @ViewBuilder var content: Content
+
+    init(
+        title: String,
+        detail: String? = nil,
+        @ViewBuilder trailing: () -> Trailing,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.detail = detail
+        self.trailing = trailing()
+        self.content = content()
+    }
+
+    var body: some View {
+        Card(padding: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                PanelHeader(title, detail: detail) { trailing }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                Hairline()
+                content
+            }
+        }
+    }
+}
+
+extension SettingsGroup where Trailing == EmptyView {
+    init(title: String, detail: String? = nil, @ViewBuilder content: () -> Content) {
+        self.init(title: title, detail: detail, trailing: { EmptyView() }, content: content)
+    }
+}
+
+private struct FormCell<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        content
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct Hairline: View {
+    var body: some View {
+        Rectangle().fill(Theme.stroke).frame(height: 1)
+    }
+}
+
+/// Label on the left, read-only value on the right, like a spec sheet line.
+private struct SpecRow<Value: View>: View {
+    let label: String
+    @ViewBuilder var value: Value
+
+    var body: some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundStyle(Theme.text)
+            Spacer()
+            value
+        }
+    }
+}
+
+private struct SourceLink: View {
+    let repo: String
+    @State private var hovering = false
+
+    private var url: URL? { URL(string: "https://github.com/\(repo)") }
+
+    var body: some View {
+        if let url {
+            Link(destination: url) {
+                HStack(spacing: 8) {
+                    Text(repo)
+                        .font(Theme.monoFont)
+                        .foregroundStyle(hovering ? Theme.text : Theme.secondary)
+                    Spacer()
+                    Text("github.com")
+                        .font(Theme.captionFont)
+                        .foregroundStyle(Theme.tertiary)
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(Theme.tertiary)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+                        .fill(hovering ? Theme.cardRaised : Color.clear)
+                )
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 8)
+            .onHover { hovering = $0 }
+            .help(url.absoluteString)
         }
     }
 }
