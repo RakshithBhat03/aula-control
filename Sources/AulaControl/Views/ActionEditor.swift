@@ -64,10 +64,26 @@ struct ActionEditor: View {
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 3)
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        // Bands are separated by full-bleed hairlines. The editor sits inside a card padded by
+        // `Theme.panelInset`, so hairlines reach out by that inset to meet the card's edges, and the
+        // header uses the same vertical rhythm as `PanelHeaderBand` so its rule lines up with the
+        // header rule of the panel beside it. Trailing space collects above the footer, so a
+        // stretched card keeps its actions on the bottom edge.
+        VStack(alignment: .leading, spacing: 0) {
             header
+                .padding(.top, 14 - Theme.panelInset)
+                .padding(.bottom, 14)
 
-            hairline
+            bleedHairline
+
+            KeyReadoutStrip(cells: [
+                ("Key", key.name),
+                ("LED", String(format: "%03d", key.light)),
+                ("HID", String(format: "0x%02X", key.usage)),
+            ])
+            .padding(.vertical, Theme.panelInset)
+
+            bleedHairline
 
             VStack(alignment: .leading, spacing: 8) {
                 fieldLabel("Action")
@@ -77,17 +93,21 @@ struct ActionEditor: View {
                     }
                 }
             }
+            .padding(.vertical, Theme.panelInset)
 
-            hairline
+            bleedHairline
 
             VStack(alignment: .leading, spacing: 12) {
                 kindEditor
                 outputRow
             }
+            .padding(.vertical, Theme.panelInset)
 
-            hairline
+            Spacer(minLength: 0)
 
-            HStack {
+            bleedHairline
+
+            HStack(spacing: 12) {
                 Button {
                     kind = .none
                     emit()
@@ -95,11 +115,12 @@ struct ActionEditor: View {
                     Label("Reset key", systemImage: "arrow.uturn.backward")
                 }
                 .buttonStyle(GhostButtonStyle())
-                Spacer()
+                Spacer(minLength: 8)
                 Text("Saved automatically")
-                    .font(.system(size: 11))
+                    .font(Theme.captionFont)
                     .foregroundStyle(Theme.tertiary)
             }
+            .padding(.top, Theme.panelInset)
         }
         .onAppear { syncFromCurrent() }
         .onChange(of: key.name) { _ in syncFromCurrent() }
@@ -108,35 +129,26 @@ struct ActionEditor: View {
 
     // MARK: - Sections
 
+    /// Same structure and metrics as `PanelHeader`: the title, then one caption line with the key's
+    /// current behavior behind a status LED.
     private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(keyDisplayName(key))
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(Theme.text)
+        VStack(alignment: .leading, spacing: 3) {
+            Text(keyDisplayName(key))
+                .font(Theme.sectionFont)
+                .foregroundStyle(Theme.text)
+                .lineLimit(1)
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(isMapped ? Theme.accent : Theme.tertiary)
+                    .frame(width: 6, height: 6)
+                Text(currentDescription)
+                    .font(Theme.captionFont)
+                    .foregroundStyle(Theme.secondary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                Spacer(minLength: 8)
-                StatusPill(text: currentDescription, color: isMapped ? Theme.accent : Theme.tertiary)
-                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
-
-            HStack(spacing: 0) {
-                IdentifierReadout(label: "Key", value: key.name)
-                readoutDivider
-                IdentifierReadout(label: "LED", value: String(format: "%03d", key.light))
-                readoutDivider
-                IdentifierReadout(label: "HID", value: String(format: "0x%02X", key.usage))
-            }
-            .background(
-                RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
-                    .fill(Theme.field)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
-                    .strokeBorder(Theme.stroke, lineWidth: 1)
-            )
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
@@ -156,7 +168,7 @@ struct ActionEditor: View {
             caption("Any key, including modifiers. A modifier target is held while the key is down.")
 
         case .combo:
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 fieldLabel("Hold modifiers")
                 HStack(spacing: 6) {
                     modifierToggle("⌃", "Control", ModifierBits.leftControl)
@@ -172,7 +184,7 @@ struct ActionEditor: View {
             caption("Works onboard and in macOS remapping.")
 
         case .media:
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 fieldLabel("Media action")
                 Menu {
                     ForEach(ConsumerControl.names, id: \.usage) { item in
@@ -197,7 +209,7 @@ struct ActionEditor: View {
                     message: "Record one in Macros, then bind it to this key."
                 )
             } else {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 8) {
                     fieldLabel("Play macro")
                     Menu {
                         ForEach(Array(macros.enumerated()), id: \.element.id) { index, macro in
@@ -229,13 +241,11 @@ struct ActionEditor: View {
     /// What the key will send with the editor's current state, shown as keycaps or a raw usage.
     private var outputRow: some View {
         HStack(alignment: .center, spacing: 10) {
-            Text("Sends")
-                .font(.system(size: 11.5, weight: .medium))
-                .foregroundStyle(Theme.secondary)
+            fieldLabel("Sends")
             Spacer(minLength: 8)
             outputValue
         }
-        .padding(.top, 2)
+        .frame(minHeight: 22)
     }
 
     @ViewBuilder
@@ -299,7 +309,7 @@ struct ActionEditor: View {
     }
 
     private func targetPicker(includeModifiers: Bool, onSelect: @escaping (String) -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             fieldLabel("Target key")
             Menu {
                 ForEach(keyGroups, id: \.0) { group, names in
@@ -360,17 +370,14 @@ struct ActionEditor: View {
 
     // MARK: - Small pieces
 
-    private var hairline: some View {
-        Rectangle().fill(Theme.stroke).frame(height: 1)
-    }
-
-    private var readoutDivider: some View {
-        Rectangle().fill(Theme.stroke).frame(width: 1)
+    /// A hairline across the full card width, reaching past the card's inner padding.
+    private var bleedHairline: some View {
+        Hairline().padding(.horizontal, -Theme.panelInset)
     }
 
     private func fieldLabel(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 11.5, weight: .medium))
+            .font(.system(size: 12, weight: .medium))
             .foregroundStyle(Theme.secondary)
     }
 
@@ -504,26 +511,43 @@ struct ActionEditor: View {
     }
 }
 
-/// Label above a mono value, one cell of the key's identifier strip.
-private struct IdentifierReadout: View {
-    let label: String
-    let value: String
+/// A boxed strip of labeled machine values (key name, LED index, HID usage, color): equal cells,
+/// each with the label above its value. Shared by the keymap and per-key inspectors so both read
+/// the same way.
+struct KeyReadoutStrip: View {
+    let cells: [(label: String, value: String)]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label)
-                .font(.system(size: 10.5))
-                .foregroundStyle(Theme.tertiary)
-            Text(value)
-                .font(Theme.monoFont)
-                .monospacedDigit()
-                .foregroundStyle(Theme.text)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+        HStack(spacing: 0) {
+            ForEach(Array(cells.enumerated()), id: \.offset) { index, cell in
+                if index > 0 {
+                    Hairline(axis: .vertical)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(cell.label)
+                        .font(Theme.captionFont)
+                        .foregroundStyle(Theme.tertiary)
+                    Text(cell.value)
+                        .font(Theme.monoFont)
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .fixedSize(horizontal: false, vertical: true)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+                .fill(Theme.field)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
+                .strokeBorder(Theme.stroke, lineWidth: 1)
+        )
     }
 }
 
