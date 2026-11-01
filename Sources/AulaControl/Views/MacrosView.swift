@@ -22,66 +22,36 @@ struct MacrosView: View {
 
     private var uploadEnabled: Bool { model.canUseHardware || model.isPreview }
 
+    /// Width of the slot bank column; the editor takes the rest of the row.
+    private let bankWidth: CGFloat = 252
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                PageHeader(
-                    eyebrow: "USB-C + macOS",
-                    title: "Macros",
-                    subtitle: "Key and mouse sequences stored in the keyboard's 100-slot macro bank. Bind a slot to a key on the Keymap page."
-                ) {
-                    HStack(spacing: 8) {
-                        Button {
-                            model.addMacro()
-                            selectedID = model.state.macros.last?.id
-                        } label: {
-                            Label("New macro", systemImage: "plus")
-                        }
-                        .buttonStyle(GhostButtonStyle())
-
-                        uploadButton
-                    }
-                }
-
-                if model.state.macros.isEmpty {
-                    Card {
-                        VStack(spacing: 4) {
-                            EmptyState(
-                                icon: "record.circle",
-                                title: "No macros",
-                                message: "Create a macro, record a few keys, then bind it to a key on the Keymap page."
-                            )
-                            Button {
-                                model.addMacro()
-                                selectedID = model.state.macros.last?.id
-                            } label: {
-                                Label("New macro", systemImage: "plus")
-                            }
-                            .buttonStyle(AccentButtonStyle())
-                            .padding(.bottom, 24)
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                } else {
-                    HStack(alignment: .top, spacing: 16) {
-                        macroList
-                            .frame(width: 252)
-                        if let macro = selectedMacro, let index = selectedIndex {
-                            editor(macro: macro, index: index)
-                        } else {
-                            Card {
-                                EmptyState(icon: "sidebar.left", title: "No macro selected", message: "Choose a slot from the bank to edit its events.")
-                            }
-                            .frame(maxWidth: .infinity)
-                        }
-                    }
+        PageScroll {
+            PageHeader(
+                eyebrow: "USB-C + macOS",
+                title: "Macros",
+                subtitle: "Key and mouse sequences stored in the keyboard's 100-slot macro bank. Bind a slot to a key on the Keymap page."
+            ) {
+                HStack(spacing: 8) {
+                    newMacroButton
+                    uploadButton
                 }
             }
-            .padding(.horizontal, 32)
-            .padding(.top, 28)
-            .padding(.bottom, 32)
+
+            bankRow {
+                if model.state.macros.isEmpty {
+                    gettingStarted
+                } else if let macro = selectedMacro, let index = selectedIndex {
+                    editor(macro: macro, index: index)
+                } else {
+                    Card(fillHeight: true) {
+                        EmptyState(icon: "sidebar.left", title: "No macro selected", message: "Choose a slot from the bank to edit its events.")
+                            .frame(maxHeight: .infinity)
+                    }
+                    .frame(height: 360)
+                }
+            }
         }
-        .scrollIndicators(.hidden)
         .onAppear {
             if selectedID == nil { selectedID = model.state.macros.first?.id }
         }
@@ -92,6 +62,40 @@ struct MacrosView: View {
             }
         }
         .onDisappear { stopRecording() }
+    }
+
+    /// The slot bank beside a detail panel. The detail panel sets the row's height and the bank
+    /// fills exactly that height, scrolling its slots, so both panels always end on the same line.
+    private func bankRow<Detail: View>(@ViewBuilder detail: () -> Detail) -> some View {
+        detail()
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .padding(.leading, bankWidth + Theme.gutter)
+            .overlay(alignment: .topLeading) {
+                macroList
+                    .frame(width: bankWidth)
+                    .frame(maxHeight: .infinity, alignment: .top)
+            }
+    }
+
+    private func createMacro() {
+        model.addMacro()
+        selectedID = model.state.macros.last?.id
+    }
+
+    /// With an empty bank, creating a macro is the page's primary action; once macros exist,
+    /// uploading them takes over and this drops to secondary styling.
+    @ViewBuilder
+    private var newMacroButton: some View {
+        let button = Button(action: createMacro) {
+            Label("New macro", systemImage: "plus")
+        }
+        .disabled(model.state.macros.count >= 100)
+
+        if model.state.macros.isEmpty {
+            button.buttonStyle(AccentButtonStyle())
+        } else {
+            button.buttonStyle(GhostButtonStyle())
+        }
     }
 
     /// The page's single primary action. With an empty bank, creating a macro is the primary
@@ -115,45 +119,106 @@ struct MacrosView: View {
 
     // MARK: - Macro bank
 
+    /// All 100 slots: filled ones are selectable, free ones show where the next macro lands.
     private var macroList: some View {
-        Card(padding: 0) {
+        Card(padding: 0, fillHeight: true) {
             VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    Text("Macro bank")
-                        .font(Theme.sectionFont)
-                        .foregroundStyle(Theme.text)
-                    Spacer()
-                    ValueChip("\(model.state.macros.count) / 100", color: Theme.secondary)
+                MacroBand {
+                    BandTitle("Macro bank", detail: "Slots fill in order from M01.") {
+                        ValueChip("\(model.state.macros.count) / 100", color: Theme.secondary)
+                    }
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 11)
 
                 Hairline()
 
-                ForEach(Array(model.state.macros.enumerated()), id: \.element.id) { index, macro in
-                    if index > 0 { Hairline() }
-                    MacroBankRow(
-                        slot: index,
-                        macro: macro,
-                        isSelected: selectedID == macro.id,
-                        isRecording: recording && selectedID == macro.id
-                    ) {
-                        selectedID = macro.id
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(model.state.macros.enumerated()), id: \.element.id) { index, macro in
+                            if index > 0 { Hairline() }
+                            MacroBankRow(
+                                slot: index,
+                                macro: macro,
+                                isSelected: selectedID == macro.id,
+                                isRecording: recording && selectedID == macro.id
+                            ) {
+                                selectedID = macro.id
+                            }
+                        }
+                        ForEach(min(model.state.macros.count, 100)..<100, id: \.self) { slot in
+                            if slot > 0 { Hairline() }
+                            FreeSlotRow(slot: slot)
+                        }
                     }
                 }
+                .scrollIndicators(.never)
             }
             .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+        }
+    }
+
+    // MARK: - Getting started
+
+    /// Empty-bank detail panel: the three steps from nothing to a bound macro, in order.
+    private var gettingStarted: some View {
+        Card(padding: 0, fillHeight: true) {
+            VStack(alignment: .leading, spacing: 0) {
+                MacroBand {
+                    BandTitle("No macros yet", detail: "A macro replays keys, mouse clicks and delays from any key you bind it to.") {
+                        EmptyView()
+                    }
+                }
+
+                Hairline()
+
+                StepRow(
+                    number: 1,
+                    title: "Create a macro",
+                    detail: "New macro takes the next free slot in the keyboard's bank."
+                ) {
+                    ValueChip(slotLabel(model.state.macros.count), color: Theme.accent)
+                }
+
+                Hairline()
+
+                StepRow(
+                    number: 2,
+                    title: "Record a sequence",
+                    detail: "Record keys captures what you type. Add delays and mouse clicks with Add step."
+                ) {
+                    HStack(spacing: 6) {
+                        Text("Stop with")
+                            .font(Theme.captionFont)
+                            .foregroundStyle(Theme.secondary)
+                        KeyTag("Esc")
+                    }
+                }
+
+                Hairline()
+
+                StepRow(
+                    number: 3,
+                    title: "Bind and upload",
+                    detail: "Assign the slot to a key on the Keymap page, then upload the bank over USB-C."
+                ) {
+                    Button {
+                        model.section = .keymap
+                    } label: {
+                        Label("Open keymap", systemImage: "keyboard")
+                    }
+                    .buttonStyle(GhostButtonStyle())
+                }
+            }
         }
     }
 
     // MARK: - Editor
 
     private func editor(macro: Macro, index: Int) -> some View {
-        Card(padding: 0) {
+        Card(padding: 0, fillHeight: true) {
             VStack(alignment: .leading, spacing: 0) {
-                editorHeader(macro: macro, index: index)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 14)
+                MacroBand {
+                    editorHeader(macro: macro, index: index)
+                }
 
                 Hairline()
 
@@ -173,35 +238,35 @@ struct MacrosView: View {
                     eventTable(macro: macro)
 
                     HStack(spacing: 8) {
-                        TextField("Type text to append…", text: $textToAdd)
+                        TextField("Type text to append", text: $textToAdd)
                             .textFieldStyle(.plain)
                             .font(Theme.bodyFont)
                             .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
+                            .frame(height: 28)
                             .background(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous).fill(Theme.field))
                             .overlay(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous).strokeBorder(Theme.stroke, lineWidth: 1))
+                            .onSubmit { appendText(to: macro) }
                         Button {
-                            guard !textToAdd.isEmpty else { return }
-                            var updated = macro
-                            updated.steps.append(contentsOf: Macro.typing(textToAdd).steps)
-                            model.updateMacro(updated)
-                            textToAdd = ""
+                            appendText(to: macro)
                         } label: {
-                            Text("Append")
+                            Text("Append text")
                         }
                         .buttonStyle(GhostButtonStyle())
+                        .disabled(textToAdd.isEmpty)
                     }
                 }
-                .padding(18)
+                .padding(Theme.panelInset)
+
+                Spacer(minLength: 0)
 
                 Hairline()
 
-                HStack(alignment: .center, spacing: 14) {
+                HStack(alignment: .center, spacing: 16) {
                     Text("Keys bind to a slot number, so deleting a macro shifts every slot after it. Avoid deleting slots that are already assigned.")
                         .font(Theme.captionFont)
                         .foregroundStyle(Theme.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     Button {
                         model.section = .keymap
                     } label: {
@@ -209,24 +274,25 @@ struct MacrosView: View {
                     }
                     .buttonStyle(GhostButtonStyle())
                 }
-                .padding(.horizontal, 18)
+                .frame(minHeight: 28)
+                .padding(.horizontal, Theme.panelInset)
                 .padding(.vertical, 12)
             }
         }
-        .frame(maxWidth: .infinity)
+    }
+
+    private func appendText(to macro: Macro) {
+        guard !textToAdd.isEmpty else { return }
+        var updated = macro
+        updated.steps.append(contentsOf: Macro.typing(textToAdd).steps)
+        model.updateMacro(updated)
+        textToAdd = ""
     }
 
     private func editorHeader(macro: Macro, index: Int) -> some View {
-        HStack(spacing: 12) {
-            Text(slotLabel(index))
-                .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
-                .foregroundStyle(Theme.accent)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .strokeBorder(Theme.accent.opacity(0.5), lineWidth: 1)
-                )
+        HStack(spacing: 8) {
+            ValueChip(slotLabel(index), color: Theme.accent)
+                .padding(.trailing, 4)
                 .accessibilityLabel("Slot \(index + 1)")
 
             TextField("Macro name", text: Binding(
@@ -238,10 +304,9 @@ struct MacrosView: View {
                 }
             ))
             .textFieldStyle(.plain)
-            .font(.system(size: 17, weight: .semibold))
+            .font(.system(size: 15, weight: .semibold))
             .foregroundStyle(Theme.text)
-
-            Spacer(minLength: 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             Button {
                 model.duplicateMacro(macro)
@@ -286,13 +351,13 @@ struct MacrosView: View {
                 .fixedSize()
                 // Borderless menus discard label backgrounds, so the field chrome sits outside.
                 .padding(.horizontal, 8)
-                .padding(.vertical, 3)
+                .frame(height: 24)
                 .background(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous).fill(Theme.field))
                 .overlay(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous).strokeBorder(Theme.strokeStrong, lineWidth: 1))
             }
 
             if macro.playMode == .repeatCount {
-                VerticalHairline()
+                Hairline(axis: .vertical)
                 SpecCell(label: "Repeat count") {
                     Stepper(value: Binding(
                         get: { macro.repeatCount },
@@ -312,22 +377,20 @@ struct MacrosView: View {
                 }
             }
 
-            VerticalHairline()
+            Hairline(axis: .vertical)
             SpecCell(label: "Events") {
                 readout("\(macro.steps.count)")
             }
 
-            VerticalHairline()
+            Hairline(axis: .vertical)
             SpecCell(label: "Key presses") {
                 readout("\(keyPressCount(macro))")
             }
 
-            VerticalHairline()
+            Hairline(axis: .vertical)
             SpecCell(label: "Length") {
                 readout("\(totalDelay(macro)) ms")
             }
-
-            Spacer(minLength: 0)
         }
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -337,7 +400,6 @@ struct MacrosView: View {
             .font(.system(size: 13, weight: .medium, design: .monospaced))
             .monospacedDigit()
             .foregroundStyle(Theme.text)
-            .frame(height: 22, alignment: .leading)
     }
 
     private func stepToolbar(macro: Macro) -> some View {
@@ -381,8 +443,8 @@ struct MacrosView: View {
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
             .background(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous).fill(Theme.cardRaised))
             .overlay(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous).strokeBorder(Theme.strokeStrong, lineWidth: 1))
 
@@ -416,35 +478,43 @@ struct MacrosView: View {
             ValueChip("\(recordingCount) captured", color: Theme.secondary)
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 7)
+        .frame(height: 32)
         .background(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous).fill(Theme.danger.opacity(0.06)))
         .overlay(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous).strokeBorder(Theme.danger.opacity(0.28), lineWidth: 1))
     }
 
-    @ViewBuilder
+    /// The event log as a table. Its header stays visible when the macro is empty, so the empty
+    /// state reads as a table with no rows yet rather than a separate box.
     private func eventTable(macro: Macro) -> some View {
-        if macro.steps.isEmpty {
-            EmptyState(icon: "list.bullet.rectangle", title: "No events", message: "Press Record keys and type a sequence, or append text below.")
-                .background(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous).fill(Theme.field))
-                .overlay(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous).strokeBorder(Theme.stroke, lineWidth: 1))
-        } else {
-            let offsets = elapsedOffsets(macro.steps)
-            VStack(spacing: 0) {
-                EventColumns(
-                    index: Text("#"),
-                    time: Text("t (ms)"),
-                    event: Text("Event"),
-                    detail: Text("Input")
-                ) {
-                    Color.clear.frame(height: 1)
+        VStack(spacing: 0) {
+            EventColumns(
+                index: Text("#"),
+                time: Text("Time (ms)"),
+                event: Text("Event"),
+                detail: Text("Input")
+            ) {
+                Color.clear.frame(height: 1)
+            }
+            .font(Theme.captionFont)
+            .foregroundStyle(Theme.tertiary)
+            .frame(height: 28)
+            .background(Theme.cardRaised)
+
+            Hairline()
+
+            if macro.steps.isEmpty {
+                VStack(spacing: 4) {
+                    Text("No events")
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(Theme.text)
+                    Text("Press Record keys and type a sequence, or append text below.")
+                        .font(Theme.captionFont)
+                        .foregroundStyle(Theme.secondary)
                 }
-                .font(.system(size: 10.5, weight: .medium))
-                .foregroundStyle(Theme.tertiary)
-                .padding(.vertical, 6)
-                .background(Theme.cardRaised)
-
-                Hairline()
-
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Theme.panelInset * 2)
+            } else {
+                let offsets = elapsedOffsets(macro.steps)
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(Array(macro.steps.enumerated()), id: \.offset) { stepIndex, step in
@@ -463,10 +533,10 @@ struct MacrosView: View {
                 }
                 .frame(maxHeight: 260)
             }
-            .background(Theme.field)
-            .clipShape(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous).strokeBorder(Theme.stroke, lineWidth: 1))
         }
+        .background(Theme.field)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous).strokeBorder(Theme.stroke, lineWidth: 1))
     }
 
     // MARK: - Derived values
@@ -555,13 +625,54 @@ struct MacrosView: View {
 
 // MARK: - Building blocks
 
-private struct VerticalHairline: View {
+/// A panel's top band with a fixed height, so the bank's header hairline lines up with the
+/// editor's and the getting-started panel's across the gutter.
+private struct MacroBand<Content: View>: View {
+    @ViewBuilder var content: Content
+
     var body: some View {
-        Rectangle().fill(Theme.stroke).frame(width: 1)
+        HStack(alignment: .center, spacing: 12) {
+            content
+        }
+        .frame(height: 36)
+        .padding(.horizontal, Theme.panelInset)
+        .padding(.vertical, 12)
     }
 }
 
-/// One column of the spec strip: small label above a value or control.
+/// Title line (with an optional trailing chip) over one line of detail. Every band title uses
+/// the same structure, so titles sit on one baseline across the gutter.
+private struct BandTitle<Trailing: View>: View {
+    let title: String
+    let detail: String
+    @ViewBuilder var trailing: Trailing
+
+    init(_ title: String, detail: String, @ViewBuilder trailing: () -> Trailing) {
+        self.title = title
+        self.detail = detail
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .center, spacing: 8) {
+                Text(title)
+                    .font(Theme.sectionFont)
+                    .foregroundStyle(Theme.text)
+                Spacer(minLength: 0)
+                trailing
+            }
+            .frame(height: 19)
+            Text(detail)
+                .font(Theme.captionFont)
+                .foregroundStyle(Theme.secondary)
+                .lineLimit(1)
+        }
+    }
+}
+
+/// One column of the spec strip: label on top, then a value or control in a fixed-height row,
+/// so labels, values and controls line up across cells.
 private struct SpecCell<Content: View>: View {
     let label: String
     @ViewBuilder var content: Content
@@ -569,12 +680,67 @@ private struct SpecCell<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label)
-                .font(.system(size: 11, weight: .medium))
+                .font(Theme.captionFont)
                 .foregroundStyle(Theme.tertiary)
             content
+                .frame(height: 24, alignment: .leading)
         }
-        .padding(.horizontal, 18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, Theme.panelInset)
         .padding(.vertical, 12)
+    }
+}
+
+/// One step of the empty-bank walkthrough: number, what to do, and a trailing hint on the
+/// panel's trailing inset.
+private struct StepRow<Trailing: View>: View {
+    let number: Int
+    let title: String
+    let detail: String
+    @ViewBuilder var trailing: Trailing
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            KeyTag("\(number)")
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(Theme.text)
+                Text(detail)
+                    .font(Theme.captionFont)
+                    .foregroundStyle(Theme.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            trailing
+        }
+        // Exactly two bank rows plus their hairline, so step dividers continue the bank's
+        // dividers across the gutter and the bank never ends on a half-cut slot.
+        .frame(height: MacroBankRow.height * 2 + 1)
+        .padding(.horizontal, Theme.panelInset)
+    }
+}
+
+/// A slot with no macro in it. Not interactive; it shows the bank's capacity and where the next
+/// macro lands.
+private struct FreeSlotRow: View {
+    let slot: Int
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(String(format: "M%02d", slot + 1))
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundStyle(Theme.tertiary.opacity(0.6))
+                .frame(width: 30, alignment: .leading)
+            Text("Free")
+                .font(Theme.captionFont)
+                .foregroundStyle(Theme.tertiary.opacity(0.8))
+            Spacer(minLength: 0)
+        }
+        .frame(height: MacroBankRow.height)
+        .padding(.horizontal, Theme.panelInset)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Slot \(slot + 1), free")
     }
 }
 
@@ -585,6 +751,8 @@ private struct MacroBankRow: View {
     let isRecording: Bool
     let action: () -> Void
     @State private var hovering = false
+
+    static let height: CGFloat = 36
 
     var body: some View {
         Button(action: action) {
@@ -604,13 +772,13 @@ private struct MacroBankRow: View {
                         .frame(width: 6, height: 6)
                         .accessibilityLabel("Recording")
                 }
-                Text(macro.steps.isEmpty ? "empty" : "\(macro.steps.count) ev")
-                    .font(.system(size: 10.5, design: .monospaced))
+                Text(eventCountLabel)
+                    .font(Theme.captionFont)
                     .monospacedDigit()
                     .foregroundStyle(Theme.tertiary)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
+            .frame(height: Self.height)
+            .padding(.horizontal, Theme.panelInset)
             .background(isSelected ? Theme.accent.opacity(0.08) : (hovering ? Theme.cardRaised : Color.clear))
             .overlay(alignment: .leading) {
                 if isSelected {
@@ -625,6 +793,14 @@ private struct MacroBankRow: View {
         .onHover { hovering = $0 }
         .accessibilityLabel("\(macro.name), slot \(slot + 1), \(macro.steps.count) events")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var eventCountLabel: String {
+        switch macro.steps.count {
+        case 0: return "No events"
+        case 1: return "1 event"
+        case let count: return "\(count) events"
+        }
     }
 }
 
@@ -645,7 +821,7 @@ private struct EventColumns<Index: View, Time: View, Event: View, Detail: View, 
             detail.frame(maxWidth: .infinity, alignment: .leading)
             trailing.frame(width: 22, alignment: .trailing)
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 12)
     }
 }
 
@@ -659,8 +835,10 @@ private struct EventRow: View {
     var body: some View {
         EventColumns(
             index: Text(String(format: "%03d", stepIndex + 1))
+                .font(Theme.monoFont)
                 .foregroundStyle(Theme.tertiary),
             time: Text("\(elapsed)")
+                .font(Theme.monoFont)
                 .foregroundStyle(Theme.tertiary),
             event: eventLabel,
             detail: detail
@@ -676,29 +854,36 @@ private struct EventRow: View {
             .help("Remove step")
             .accessibilityLabel("Remove step \(stepIndex + 1)")
         }
-        .font(.system(size: 11.5, weight: .regular, design: .monospaced))
+        .font(.system(size: 12))
         .monospacedDigit()
-        .padding(.vertical, 5)
+        .frame(minHeight: 30)
         .background(hovering ? Theme.cardRaised.opacity(0.6) : Color.clear)
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
     }
 
     private var eventLabel: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 6) {
             switch step {
             case .key(_, let down):
-                Text(down ? "↓" : "↑").foregroundStyle(Theme.secondary)
-                Text(down ? "key down" : "key up").foregroundStyle(Theme.text)
+                eventGlyph(down ? "arrow.down" : "arrow.up")
+                Text(down ? "Key down" : "Key up").foregroundStyle(Theme.text)
             case .mouse(_, let down):
-                Text(down ? "↓" : "↑").foregroundStyle(Theme.secondary)
-                Text(down ? "mouse down" : "mouse up").foregroundStyle(Theme.text)
+                eventGlyph(down ? "arrow.down" : "arrow.up")
+                Text(down ? "Mouse down" : "Mouse up").foregroundStyle(Theme.text)
             case .delay:
-                Text("·").foregroundStyle(Theme.tertiary)
-                Text("wait").foregroundStyle(Theme.secondary)
+                eventGlyph("clock")
+                Text("Wait").foregroundStyle(Theme.secondary)
             }
         }
         .lineLimit(1)
+    }
+
+    private func eventGlyph(_ name: String) -> some View {
+        Image(systemName: name)
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(Theme.tertiary)
+            .frame(width: 10)
     }
 
     @ViewBuilder
@@ -716,6 +901,7 @@ private struct EventRow: View {
                 .foregroundStyle(Theme.text)
         case .delay(let ms):
             Text("\(ms) ms")
+                .font(Theme.monoFont)
                 .foregroundStyle(Theme.secondary)
         }
     }
