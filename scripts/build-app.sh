@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 APP_NAME="AULA Control"
 BUNDLE="dist/${APP_NAME}.app"
 BUILD_CONFIG="${CONFIG:-release}"
-VERSION="${VERSION:-1.0.0}"
+VERSION="${VERSION:-1.0.1}"
 
 # Universal (Apple silicon + Intel) by default; ARCH=native builds only for this Mac, which is faster.
 ARCH_FLAGS=(--arch arm64 --arch x86_64)
