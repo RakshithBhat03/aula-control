@@ -15,7 +15,7 @@ struct BatteryIndicator: View {
                         .strokeBorder(Theme.secondary.opacity(0.8), lineWidth: 1)
                     RoundedRectangle(cornerRadius: 1.2, style: .continuous)
                         .fill(low ? Theme.danger : Theme.text.opacity(0.85))
-                        .frame(width: max(1.5, 15 * CGFloat(min(max(level, 0), 100)) / 100))
+                        .frame(width: max(1.5, 17 * CGFloat(min(max(level, 0), 100)) / 100))
                         .padding(2)
                 }
                 .frame(width: 21, height: 10)

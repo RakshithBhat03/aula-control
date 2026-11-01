@@ -56,8 +56,8 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .perKey: return "⌘3"
         case .keymap: return "⌘4"
         case .macros: return "⌘5"
-        case .macRemap: return "⌘6"
-        case .device: return "⌘7"
+        case .device: return "⌘6"
+        case .macRemap: return "⌘7"
         case .settings: return "⌘8"
         }
     }
@@ -67,7 +67,7 @@ enum RemapLayer: String, CaseIterable, Identifiable {
     case normal
     case fn
     var id: String { rawValue }
-    var title: String { self == .normal ? "Normal layer" : "FN layer" }
+    var title: String { self == .normal ? "Normal layer" : "Fn layer" }
 }
 
 struct StatusMessage: Identifiable, Equatable {
@@ -306,6 +306,7 @@ final class AppModel: ObservableObject {
         }
         switch kind {
         case .bluetooth:
+            setBattery(nil) // Don't carry a dongle reading over to the Bluetooth link.
             bluetoothBattery.onChange = { [weak self] level in
                 DispatchQueue.main.async { self?.setBattery(level) }
             }

@@ -12,7 +12,7 @@ struct DeviceView: View {
             PageHeader(
                 eyebrow: "USB-C",
                 title: "Device",
-                subtitle: "Connection details, power and response options, and key locks stored in the keyboard's firmware."
+                subtitle: "Connection details, plus power, response and key-lock options stored on the keyboard."
             ) {
                 HStack(spacing: 8) {
                     StatusPill(
@@ -23,7 +23,7 @@ struct DeviceView: View {
                     Button {
                         model.pushAll()
                     } label: {
-                        Label("Push saved config", systemImage: "arrow.down.to.line")
+                        Label("Apply all", systemImage: "arrow.down.to.line")
                     }
                     .buttonStyle(GhostButtonStyle())
                     .disabled(model.isBusy || !hardwareReady)
@@ -177,7 +177,7 @@ struct DeviceView: View {
     private var utilitiesCard: some View {
         Card(padding: 0, fillHeight: true) {
             VStack(alignment: .leading, spacing: 0) {
-                PanelHeaderBand("Utilities")
+                PanelHeaderBand("Utilities", detail: "One-off actions on the keyboard.")
                 FormRow("Sync LCD clock", detail: "Sends the current date and time to the 240 × 135 screen.") {
                     Button("Sync now") { model.syncClock() }
                         .buttonStyle(GhostButtonStyle())
@@ -198,12 +198,21 @@ struct DeviceView: View {
 
     // MARK: - Connection
 
+    /// Why there's no battery level: USB-C has no battery report; the wireless links read it.
+    private var batteryNote: String {
+        switch model.connection.kind {
+        case .wired: return "Not reported over USB-C"
+        case .bluetooth, .dongle: return "Waiting for the keyboard"
+        case .absent: return "—"
+        }
+    }
+
     private var connectionCard: some View {
         let wired = model.connection.kind == .wired
         let absent = model.connection.kind == .absent
         return Card(padding: 0) {
             VStack(alignment: .leading, spacing: 0) {
-                PanelHeaderBand("Connection") {
+                PanelHeaderBand("Connection", detail: "Read from the keyboard's HID services.") {
                     HStack(spacing: 6) {
                         Circle()
                             .fill(model.connectionColor)
@@ -217,6 +226,16 @@ struct DeviceView: View {
                 SpecRow("Product") { SpecValue(absent ? "—" : model.connection.product, machine: false) }
                 Hairline()
                 SpecRow("Transport") { SpecValue(absent ? "—" : model.connection.transport, machine: false) }
+                Hairline()
+                SpecRow("Battery") {
+                    if let level = model.batteryPercent {
+                        BatteryIndicator(level: level)
+                    } else {
+                        Text(batteryNote)
+                            .font(Theme.captionFont)
+                            .foregroundStyle(Theme.tertiary)
+                    }
+                }
                 Hairline()
                 SpecRow("USB ID") {
                     SpecValue(String(format: "%04X:%04X", model.connection.vendorID, model.connection.productID))

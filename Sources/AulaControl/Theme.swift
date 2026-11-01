@@ -120,8 +120,12 @@ struct PanelHeader<Trailing: View>: View {
         self.trailing = trailing()
     }
 
+    /// Title plus one caption line. Every header is at least this tall and centers its accessory
+    /// in it, so headers of panels side by side end on the same line whatever they carry.
+    static var minHeight: CGFloat { 34 }
+
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
+        HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(Theme.sectionFont)
@@ -130,11 +134,14 @@ struct PanelHeader<Trailing: View>: View {
                     Text(detail)
                         .font(Theme.captionFont)
                         .foregroundStyle(Theme.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                 }
             }
+            .frame(minHeight: Self.minHeight, alignment: detail == nil ? .leading : .topLeading)
             Spacer(minLength: 8)
             trailing
+                .frame(minHeight: Self.minHeight)
         }
     }
 }
@@ -252,7 +259,9 @@ struct PageHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .center, spacing: 16) {
+            // Actions sit level with the title, and the subtitle is one line, so the rule below
+            // lands at the same height on every page.
+            HStack(alignment: .top, spacing: 16) {
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         Text(title)
@@ -274,8 +283,9 @@ struct PageHeader: View {
                     Text(subtitle)
                         .font(Theme.bodyFont)
                         .foregroundStyle(Theme.secondary)
-                        .frame(maxWidth: 620, alignment: .leading)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .help(subtitle)
                 }
                 Spacer(minLength: 20)
                 trailing

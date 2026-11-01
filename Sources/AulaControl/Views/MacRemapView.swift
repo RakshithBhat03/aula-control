@@ -29,7 +29,7 @@ struct MacRemapView: View {
             PageHeader(
                 eyebrow: "Bluetooth or USB",
                 title: "Mac remap",
-                subtitle: "Per-key remapping in the macOS event layer. Works over Bluetooth; the keyboard firmware is not modified."
+                subtitle: "Remap keys in macOS. Works over Bluetooth and never changes the keyboard's firmware."
             ) {
                 StatusPill(text: statusText, color: statusColor)
             }
@@ -72,23 +72,17 @@ struct MacRemapView: View {
     private var permissionsPanel: some View {
         Card(padding: 0, fillHeight: true) {
             VStack(alignment: .leading, spacing: 0) {
-                // The refresh button is overlaid rather than passed as the band's accessory: as an
-                // accessory it makes this band taller than Behavior's, and the rows beside each
-                // other stop lining up.
-                PanelHeaderBand("Permissions", detail: "Granted per app in System Settings → Privacy & Security.")
-                    .overlay(alignment: .trailing) {
-                        Button {
-                            model.refreshPermissions()
-                        } label: {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 11, weight: .medium))
-                        }
-                        .buttonStyle(GhostButtonStyle())
-                        .help("Refresh permission status")
-                        .accessibilityLabel("Refresh permission status")
-                        .padding(.trailing, Theme.panelInset)
-                        .padding(.bottom, 1)
+                PanelHeaderBand("Permissions", detail: "Granted per app in System Settings → Privacy & Security.") {
+                    Button {
+                        model.refreshPermissions()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 11, weight: .medium))
                     }
+                    .buttonStyle(GhostButtonStyle())
+                    .help("Refresh permission status")
+                    .accessibilityLabel("Refresh permission status")
+                }
 
                 permissionRow(
                     title: "Accessibility",
@@ -330,7 +324,7 @@ struct MacRemapView: View {
     private var limitationsPanel: some View {
         Card(padding: 0) {
             VStack(alignment: .leading, spacing: 0) {
-                PanelHeaderBand("How it behaves")
+                PanelHeaderBand("How it behaves", detail: "What macOS remapping can and can't do.")
                 HStack(alignment: .top, spacing: 0) {
                     limitation("Works over Bluetooth", "The event tap runs in macOS, so the vendor HID interface is not needed.")
                     Hairline(axis: .vertical)

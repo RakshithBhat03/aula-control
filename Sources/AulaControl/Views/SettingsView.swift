@@ -33,7 +33,7 @@ struct SettingsView: View {
     private var generalPanel: some View {
         Card(padding: 0) {
             VStack(alignment: .leading, spacing: 0) {
-                PanelHeaderBand("General")
+                PanelHeaderBand("General", detail: "Startup and preview behavior.")
                 FormRow("Launch at login", detail: "Keeps remapping active after a restart.") {
                     SettingsSwitch(label: "Launch at login", isOn: Binding(
                         get: { model.launchAtLogin },
@@ -97,7 +97,7 @@ struct SettingsView: View {
                     ValueChip("JSON", color: Theme.secondary)
                 }
                 HStack(spacing: 10) {
-                    Text(model.store.url.path)
+                    Text((model.store.url.path as NSString).abbreviatingWithTildeInPath)
                         .font(Theme.monoFont)
                         .foregroundStyle(Theme.secondary)
                         .textSelection(.enabled)
@@ -133,7 +133,7 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 0) {
                 PanelHeaderBand(
                     "About",
-                    detail: "Not affiliated with AULA. Use at your own risk; firmware updates can change the protocol."
+                    detail: "Not affiliated with AULA."
                 )
                 FormRow("Version") { ValueChip(appVersion) }
                 Hairline()

@@ -432,7 +432,7 @@ struct OverviewView: View {
     private var setupPanel: some View {
         Card(padding: 0, fillHeight: true) {
             VStack(alignment: .leading, spacing: 0) {
-                PanelHeaderBand("Setup")
+                PanelHeaderBand("Setup", detail: "Three steps to a configured keyboard.")
                 stepRow(
                     number: 1,
                     title: "Connect over USB-C",

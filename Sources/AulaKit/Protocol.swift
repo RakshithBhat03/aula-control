@@ -82,7 +82,7 @@ public enum LightingMode: Int, CaseIterable, Codable, Identifiable, Sendable {
         case .singleOff: return "Single Off"
         case .glittering: return "Glittering"
         case .falling: return "Falling"
-        case .colourful: return "Colourful"
+        case .colourful: return "Colorful"
         case .breath: return "Breath"
         case .spectrum: return "Spectrum"
         case .outward: return "Outward"

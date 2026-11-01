@@ -44,7 +44,7 @@ struct LightingView: View {
             PageHeader(
                 eyebrow: "USB-C",
                 title: "Lighting",
-                subtitle: "20 firmware effects with color, brightness, speed and direction. Stored on the keyboard, so settings follow it between machines."
+                subtitle: "20 firmware effects. Stored on the keyboard, so they follow it to other computers."
             ) {
                 HStack(spacing: 10) {
                     StatusPill(
@@ -89,7 +89,7 @@ struct LightingView: View {
                     }
                     Hairline(axis: .vertical)
                     ReadoutCell(label: "Mode") {
-                        Text(String(format: "0x%02X", lighting.mode.rawValue)).font(ReadoutFont.mono)
+                        Text(String(format: "%02d", lighting.mode.rawValue)).font(ReadoutFont.mono)
                     }
                     Hairline(axis: .vertical)
                     ReadoutCell(label: "Color") {
@@ -192,9 +192,6 @@ struct LightingView: View {
                         Label("Reset", systemImage: "arrow.counterclockwise")
                     }
                     .buttonStyle(GhostButtonStyle())
-                    // Center the button on the two-line title block instead of aligning its
-                    // baseline, so this band stays the same height as the Effect band beside it.
-                    .alignmentGuide(.firstTextBaseline) { _ in 10 }
                     .help("Reset lighting to defaults")
                     .accessibilityLabel("Reset lighting to defaults")
                 }

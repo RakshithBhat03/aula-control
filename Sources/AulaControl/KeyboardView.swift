@@ -143,7 +143,7 @@ struct KeyCapView: View, Equatable {
                 let height = size.height
                 let width = size.width
                 let isWide = width > height * 1.45
-                let primary = min(width * 0.26, height * 0.30, isWide ? 13 : 12.5)
+                let primary = max(8, min(width * 0.26, height * 0.30, isWide ? 13 : 12.5))
                 let secondary = min(width * 0.17, height * 0.18, 10)
                 let radius = max(3, unit * 0.10)
                 let side = max(1.5, unit * 0.06)
@@ -209,7 +209,7 @@ struct KeyCapView: View, Equatable {
                         .lineLimit(1)
                         .minimumScaleFactor(0.55)
                 }
-                if let sub = key.sublabel {
+                if let sub = key.sublabel, unit >= 30 {
                     Text(sub)
                         .font(.system(size: secondary))
                         .foregroundStyle(labelColor.opacity(0.55))
@@ -223,7 +223,7 @@ struct KeyCapView: View, Equatable {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         } else {
             VStack(alignment: .leading, spacing: 0) {
-                if let sub = key.sublabel, key.name != "space" {
+                if let sub = key.sublabel, key.name != "space", unit >= 30 {
                     Text(sub)
                         .font(.system(size: secondary))
                         .foregroundStyle(labelColor.opacity(0.55))

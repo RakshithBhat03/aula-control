@@ -4,7 +4,8 @@ import AulaKit
 /// Reads the keyboard's battery level over Bluetooth from the standard GATT Battery Service
 /// (0x180F, Battery Level 0x2A19). macOS doesn't publish a battery level for this keyboard itself,
 /// because it isn't an Apple accessory, so the app reads it from the already-connected peripheral.
-/// Read-only: it never writes to the keyboard and never disconnects it.
+/// Read-only: it only reads the Battery Level characteristic (no notification subscription, which
+/// would write the descriptor), and never disconnects the keyboard.
 ///
 /// Started only while the keyboard is connected over Bluetooth, so USB users never see the
 /// Bluetooth permission prompt.
@@ -22,8 +23,8 @@ final class BluetoothBatteryMonitor: NSObject, CBCentralManagerDelegate, CBPerip
     func start() {
         guard central == nil else { return }
         central = CBCentralManager(delegate: self, queue: .main)
-        // Notifications cover most changes; this re-read covers keyboards that don't notify.
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
+        // Battery moves slowly; a read a minute keeps it current without subscribing.
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             self?.refresh()
         }
     }
@@ -76,7 +77,14 @@ final class BluetoothBatteryMonitor: NSObject, CBCentralManagerDelegate, CBPerip
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         characteristic = nil
+        self.peripheral = nil
         onChange?(nil)
+        // The keyboard may come straight back (sleep, slot switch); look again shortly.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in self?.findKeyboard() }
+    }
+
+    func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
+        self.peripheral = nil
     }
 
     // MARK: CBPeripheralDelegate
@@ -90,9 +98,6 @@ final class BluetoothBatteryMonitor: NSObject, CBCentralManagerDelegate, CBPerip
         guard let level = service.characteristics?.first(where: { $0.uuid == Self.batteryLevel }) else { return }
         characteristic = level
         peripheral.readValue(for: level)
-        if level.properties.contains(.notify) {
-            peripheral.setNotifyValue(true, for: level)
-        }
     }
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {

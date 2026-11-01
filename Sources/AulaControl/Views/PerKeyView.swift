@@ -31,13 +31,13 @@ struct PerKeyView: View {
             PageHeader(
                 eyebrow: "USB-C",
                 title: "Per-key RGB",
-                subtitle: "Set a color for each key. The keyboard stores one 104-key frame and keeps it after unplugging."
+                subtitle: "Set a color for each key. The keyboard keeps the frame after unplugging."
             ) {
                 HStack(spacing: 10) {
                     StatusPill(
                         text: canSend ? "Ready to send" : "USB-C required",
                         color: canSend ? Theme.success : Theme.secondary,
-                        icon: canSend ? "checkmark" : "cable.connector"
+                        icon: canSend ? nil : "cable.connector"
                     )
                     Button {
                         model.applyPerKey()

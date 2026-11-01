@@ -30,11 +30,12 @@ struct MacrosView: View {
             PageHeader(
                 eyebrow: "USB-C + macOS",
                 title: "Macros",
-                subtitle: "Key and mouse sequences stored in the keyboard's 100-slot macro bank. Bind a slot to a key on the Keymap page."
+                subtitle: "Key and mouse sequences in the keyboard's 100-slot bank. Bind them on the Keymap page."
             ) {
+                // The accent action sits last, on the trailing edge, as on every other page.
                 HStack(spacing: 8) {
-                    newMacroButton
                     uploadButton
+                    newMacroButton
                 }
             }
 
