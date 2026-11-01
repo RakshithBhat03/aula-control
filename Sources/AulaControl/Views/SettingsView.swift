@@ -9,109 +9,103 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                PageHeader(
-                    eyebrow: "macOS",
-                    title: "Settings",
-                    subtitle: "Startup behavior, permissions and the local configuration file."
-                )
+        PageScroll {
+            PageHeader(
+                eyebrow: "macOS",
+                title: "Settings",
+                subtitle: "Startup behavior, permissions and the local configuration file."
+            )
 
-                VStack(alignment: .leading, spacing: 16) {
-                    generalGroup
-                    permissionsGroup
-                    configurationGroup
-                    aboutGroup
+            SplitRow {
+                VStack(alignment: .leading, spacing: Theme.gutter) {
+                    generalPanel
+                    permissionsPanel
+                    configurationPanel
                 }
-                .frame(maxWidth: 720, alignment: .leading)
+            } aside: {
+                aboutPanel
             }
-            .padding(.horizontal, 32)
-            .padding(.top, 28)
-            .padding(.bottom, 32)
         }
-        .scrollIndicators(.hidden)
     }
 
-    // MARK: - Groups
+    // MARK: - Panels
 
-    private var generalGroup: some View {
-        SettingsGroup(title: "General") {
-            FormCell {
-                ToggleRow(
-                    title: "Launch at login",
-                    subtitle: "Keeps remapping active after a restart.",
-                    isOn: Binding(
+    private var generalPanel: some View {
+        Card(padding: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                PanelHeaderBand("General")
+                FormRow("Launch at login", detail: "Keeps remapping active after a restart.") {
+                    SettingsSwitch(label: "Launch at login", isOn: Binding(
                         get: { model.launchAtLogin },
                         set: { model.setLaunchAtLogin($0) }
-                    )
-                )
-            }
-            Hairline()
-            FormCell {
-                ToggleRow(
-                    title: "Apply saved config on USB connect",
-                    subtitle: "Sends lighting, keymap and macros when the cable is plugged in.",
-                    isOn: Binding(
+                    ))
+                }
+                Hairline()
+                FormRow(
+                    "Apply saved config on USB connect",
+                    detail: "Sends lighting, keymap and macros when the cable is plugged in."
+                ) {
+                    SettingsSwitch(label: "Apply saved config on USB connect", isOn: Binding(
                         get: { model.state.autoApplyOnConnect },
                         set: { model.state.autoApplyOnConnect = $0 }
-                    )
-                )
-            }
-            Hairline()
-            FormCell {
-                ToggleRow(
-                    title: "Preview mode",
-                    subtitle: "Simulates every command without writing to the keyboard. Use it to try layouts before plugging in.",
-                    isOn: Binding(
+                    ))
+                }
+                Hairline()
+                FormRow(
+                    "Preview mode",
+                    detail: "Simulates every command without writing to the keyboard. Use it to try layouts before plugging in."
+                ) {
+                    SettingsSwitch(label: "Preview mode", isOn: Binding(
                         get: { model.demoMode },
                         set: { model.demoMode = $0 }
-                    )
-                )
+                    ))
+                }
             }
         }
     }
 
-    private var permissionsGroup: some View {
-        SettingsGroup(
-            title: "Permissions",
-            detail: "Granted in System Settings > Privacy & Security."
-        ) {
-            Button {
-                model.refreshPermissions()
-            } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
-            }
-            .buttonStyle(GhostButtonStyle())
-            .help("Re-check permission status")
-        } content: {
-            permission("Accessibility", "Remap keys and play macros.", model.accessibilityGranted) {
-                model.requestAccessibility()
-            }
-            Hairline()
-            permission("Input Monitoring", "Identify the keyboard's HID services.", model.inputMonitoringGranted) {
-                model.requestInputMonitoring()
+    private var permissionsPanel: some View {
+        Card(padding: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                PanelHeaderBand("Permissions", detail: "Granted in System Settings > Privacy & Security.") {
+                    Button {
+                        model.refreshPermissions()
+                    } label: {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(GhostButtonStyle())
+                    .help("Re-check permission status")
+                }
+                permission("Accessibility", "Remap keys and play macros.", model.accessibilityGranted) {
+                    model.requestAccessibility()
+                }
+                Hairline()
+                permission("Input Monitoring", "Identify the keyboard's HID services.", model.inputMonitoringGranted) {
+                    model.requestInputMonitoring()
+                }
             }
         }
     }
 
-    private var configurationGroup: some View {
-        SettingsGroup(
-            title: "Configuration file",
-            detail: "Saved automatically. The keyboard protocol is write-only, so this file is the source of truth."
-        ) {
-            ValueChip("JSON", color: Theme.secondary)
-        } content: {
-            FormCell {
+    private var configurationPanel: some View {
+        Card(padding: 0, fillHeight: true) {
+            VStack(alignment: .leading, spacing: 0) {
+                PanelHeaderBand(
+                    "Configuration file",
+                    detail: "Saved automatically. The keyboard protocol is write-only, so this file is the source of truth."
+                ) {
+                    ValueChip("JSON", color: Theme.secondary)
+                }
                 HStack(spacing: 10) {
                     Text(model.store.url.path)
                         .font(Theme.monoFont)
                         .foregroundStyle(Theme.secondary)
                         .textSelection(.enabled)
-                        .lineLimit(2)
+                        .lineLimit(1)
                         .truncationMode(.middle)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, 10)
+                        .frame(height: 28)
                         .background(
                             RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
                                 .fill(Theme.field)
@@ -120,6 +114,7 @@ struct SettingsView: View {
                             RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
                                 .strokeBorder(Theme.stroke, lineWidth: 1)
                         )
+                        .help(model.store.url.path)
 
                     Button {
                         model.revealStateFile()
@@ -128,72 +123,53 @@ struct SettingsView: View {
                     }
                     .buttonStyle(GhostButtonStyle())
                 }
+                .padding(Theme.panelInset)
             }
         }
     }
 
-    private var aboutGroup: some View {
-        SettingsGroup(
-            title: "About",
-            detail: "Not affiliated with AULA. Use at your own risk; firmware updates can change the protocol."
-        ) {
-            FormCell {
-                SpecRow(label: "Version") { ValueChip(appVersion) }
-            }
-            Hairline()
-            FormCell {
-                SpecRow(label: "Device") { ValueChip("AULA F108 Pro") }
-            }
-            Hairline()
-            FormCell {
-                SpecRow(label: "Interface") { ValueChip("USB HID 0xFF13") }
-            }
-            Hairline()
-            FormCell {
-                SpecRow(label: "Driver") {
-                    Text("None, no kernel extension")
-                        .font(Theme.captionFont)
-                        .foregroundStyle(Theme.secondary)
-                }
-            }
-            Hairline()
-            FormCell {
-                SpecRow(label: "Storage") {
-                    Text("Settings stay on this Mac")
-                        .font(Theme.captionFont)
-                        .foregroundStyle(Theme.secondary)
-                }
-            }
-            Hairline()
+    private var aboutPanel: some View {
+        Card(padding: 0, fillHeight: true) {
             VStack(alignment: .leading, spacing: 0) {
+                PanelHeaderBand(
+                    "About",
+                    detail: "Not affiliated with AULA. Use at your own risk; firmware updates can change the protocol."
+                )
+                FormRow("Version") { ValueChip(appVersion) }
+                Hairline()
+                FormRow("Device") { RowValueText("AULA F108 Pro") }
+                Hairline()
+                FormRow("Interface") { ValueChip("USB HID 0xFF13") }
+                Hairline()
+                FormRow("Driver") { RowValueText("None, no kernel extension") }
+                Hairline()
+                FormRow("Storage") { RowValueText("Settings stay on this Mac") }
+                Hairline()
+
+                // When the aside is stretched to the main column, the slack sits above the sources
+                // group as section spacing instead of as a void under the last link.
+                Spacer(minLength: 0)
+
                 Text("Protocol sources")
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(Theme.text)
-                    .padding(.horizontal, 16)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Theme.tertiary)
+                    .padding(.horizontal, Theme.panelInset)
                     .padding(.top, 12)
-                    .padding(.bottom, 6)
+                    .padding(.bottom, 2)
                 SourceLink(repo: "parsiya/f108-pro")
+                Hairline()
                 SourceLink(repo: "bacoinz/aula-studio")
+                Hairline()
                 SourceLink(repo: "sarequl/aula-studio")
             }
-            .padding(.bottom, 8)
         }
     }
 
     // MARK: - Rows
 
     private func permission(_ title: String, _ detail: String, _ granted: Bool, action: @escaping () -> Void) -> some View {
-        FormCell {
+        FormRow(title, detail: detail) {
             HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.system(size: 12.5, weight: .medium))
-                        .foregroundStyle(Theme.text)
-                    Text(detail)
-                        .font(Theme.captionFont)
-                        .foregroundStyle(Theme.secondary)
-                }
-                Spacer()
                 HStack(spacing: 6) {
                     Circle()
                         .fill(granted ? Theme.success : Theme.danger)
@@ -212,73 +188,36 @@ struct SettingsView: View {
     }
 }
 
-// MARK: - Form primitives
+// MARK: - Row pieces
 
-/// One flat panel per settings section: header strip, hairline, then rows separated by hairlines.
-private struct SettingsGroup<Trailing: View, Content: View>: View {
-    let title: String
-    var detail: String?
-    @ViewBuilder var trailing: Trailing
-    @ViewBuilder var content: Content
-
-    init(
-        title: String,
-        detail: String? = nil,
-        @ViewBuilder trailing: () -> Trailing,
-        @ViewBuilder content: () -> Content
-    ) {
-        self.title = title
-        self.detail = detail
-        self.trailing = trailing()
-        self.content = content()
-    }
-
-    var body: some View {
-        Card(padding: 0) {
-            VStack(alignment: .leading, spacing: 0) {
-                PanelHeader(title, detail: detail) { trailing }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                Hairline()
-                content
-            }
-        }
-    }
-}
-
-extension SettingsGroup where Trailing == EmptyView {
-    init(title: String, detail: String? = nil, @ViewBuilder content: () -> Content) {
-        self.init(title: title, detail: detail, trailing: { EmptyView() }, content: content)
-    }
-}
-
-private struct FormCell<Content: View>: View {
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        content
-            .padding(.horizontal, 16)
-            .padding(.vertical, 11)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-/// Label on the left, read-only value on the right, like a spec sheet line.
-private struct SpecRow<Value: View>: View {
+private struct SettingsSwitch: View {
     let label: String
-    @ViewBuilder var value: Value
+    @Binding var isOn: Bool
 
     var body: some View {
-        HStack {
-            Text(label)
-                .font(.system(size: 12.5, weight: .medium))
-                .foregroundStyle(Theme.text)
-            Spacer()
-            value
-        }
+        Toggle(label, isOn: $isOn)
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .controlSize(.small)
+            .tint(Theme.accent)
     }
 }
 
+/// Plain-language read-only value at a row's trailing edge.
+private struct RowValueText: View {
+    let text: String
+
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text)
+            .font(Theme.captionFont)
+            .foregroundStyle(Theme.secondary)
+            .lineLimit(1)
+    }
+}
+
+/// A repository link as a full-width row, on the same height and insets as `FormRow`.
 private struct SourceLink: View {
     let repo: String
     @State private var hovering = false
@@ -292,7 +231,8 @@ private struct SourceLink: View {
                     Text(repo)
                         .font(Theme.monoFont)
                         .foregroundStyle(hovering ? Theme.text : Theme.secondary)
-                    Spacer()
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
                     Text("github.com")
                         .font(Theme.captionFont)
                         .foregroundStyle(Theme.tertiary)
@@ -300,16 +240,13 @@ private struct SourceLink: View {
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(Theme.tertiary)
                 }
-                .padding(.horizontal, 8)
+                .frame(minHeight: Theme.rowHeight)
+                .padding(.horizontal, Theme.panelInset)
                 .padding(.vertical, 6)
-                .background(
-                    RoundedRectangle(cornerRadius: Theme.radiusSmall, style: .continuous)
-                        .fill(hovering ? Theme.cardRaised : Color.clear)
-                )
+                .background(hovering ? Theme.cardRaised : Color.clear)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .padding(.horizontal, 8)
             .onHover { hovering = $0 }
             .help(url.absoluteString)
         }
